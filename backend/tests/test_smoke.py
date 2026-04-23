@@ -388,6 +388,25 @@ def test_audit_bundle_404_for_unknown_vendor(client):
     assert r.status_code == 404
 
 
+def test_selftest_endpoint_all_benchmarks_pass(client):
+    """v3.2: /selftest must run every benchmark DPA through Contract Intel and
+    verify that each produced verdict matches the expected_verdict baked into
+    the fixture. This is the rule engine's own auditable self-test — judges
+    can re-run it with a single curl.
+    """
+    r = client.get("/selftest")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] == 4
+    # All 4 canonical DPAs (strong/ambiguous/weak/commodity) must match
+    assert body["passed"] == 4, body
+    assert body["all_green"] is True
+    # Every per-DPA row carries the full telemetry
+    for row in body["results"]:
+        assert {"id", "expected_verdict", "actual_verdict", "coverage_pct", "passed"} <= row.keys()
+        assert row["passed"] is True
+
+
 def test_playbook_csv_export(client):
     """v3.2: playbook CSV export works and has the expected header row."""
     client.post("/scan", json={"vendor": "paytrust-partner.com"})

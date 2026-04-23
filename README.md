@@ -1,14 +1,22 @@
 # VendorGuard AI  &nbsp;·&nbsp; v3.2
 
 > **The Vendor Access Control Plane for DPDP-compliant India.**
-> Scan → Score → DPDP-map → Gateway-protect → **Fix the contract** — every finding grounded in the DPDP Act (§-numbered, gazette-page cited, ₹-penalty mapped) and crosswalked to ISO 27001 / SOC 2 / NIST CSF.
+> Scan → Score → DPDP-map → Gateway-protect → **Fix the contract** → **Ship the audit ZIP** — every finding grounded in the DPDP Act (§-numbered, gazette-page cited, ₹-penalty mapped) and crosswalked to ISO 27001 / SOC 2 / NIST CSF.
 
-![status](https://img.shields.io/badge/status-hackathon%20ready-success) ![stack](https://img.shields.io/badge/stack-FastAPI%20%2B%20Tailwind-blue) ![ml](https://img.shields.io/badge/ML-IsolationForest-6366f1) ![rules](https://img.shields.io/badge/rules-17%20DPDP%20contract%20rules-f59e0b) ![rag](https://img.shields.io/badge/RAG-49%20passages-f59e0b) ![osint](https://img.shields.io/badge/OSINT-crt.sh%20live-10b981) ![license](https://img.shields.io/badge/license-MIT-green)
+![status](https://img.shields.io/badge/status-hackathon%20ready-success) ![stack](https://img.shields.io/badge/stack-FastAPI%20%2B%20Tailwind-blue) ![ml](https://img.shields.io/badge/ML-IsolationForest-6366f1) ![rules](https://img.shields.io/badge/rules-17%20DPDP%20contract%20rules-f59e0b) ![rag](https://img.shields.io/badge/RAG-49%20passages-f59e0b) ![osint](https://img.shields.io/badge/OSINT-crt.sh%20live-10b981) ![selftest](https://img.shields.io/badge/selftest-4%2F4%20benchmark%20DPAs-10b981) ![tests](https://img.shields.io/badge/pytest-31%2F31-10b981) ![license](https://img.shields.io/badge/license-MIT-green)
 
 Built for **Athernex 2026** (DSCE × BMSCE) by Team Rashi Innovators.
 
 > For the pitch script + judge Q&A cheat sheet → see [`PITCH.md`](./PITCH.md).
 > For the competitive landscape (OneTrust / Securiti / BigID / Tsaaro) → see [`COMPETITIVE.md`](./COMPETITIVE.md).
+
+## Why we win (30-second read)
+
+1. **DPDP-native, not GDPR-retrofitted.** Every rule is §-numbered, gazette-page cited, ₹-penalty mapped, and crosswalked to ISO 27001 / SOC 2 / NIST CSF. OneTrust's DPDP module is a rebrand; ours is built *from* the Act.
+2. **Evidence trace on every verdict.** Red / amber / green + confidence (0.55-0.99) + keyword + offset + snippet + Act quote at the right gazette page + ready-to-counter-sign rewrite. Auditable by a non-lawyer in 15 seconds.
+3. **Reproducible rule-engine self-test.** `GET /selftest` runs all 4 benchmark DPAs through Contract Intelligence and verifies every verdict matches the expected one baked into `backend/app/data/benchmark_dpas.json`. Not a black box — a provable one.
+4. **One-click DPDP Audit ZIP.** `GET /audit/{vendor}.zip` bundles scan.json + playbook.json + alerts.json + CISO board PDF + CERT-In 6-hour Form-A PDF + README. Hand this to the Data Protection Board.
+5. **Real-time containment, not just reporting.** IsolationForest + deterministic rules decide, autonomous response (token revoke, endpoint lock) executes, WhatsApp / Slack / SSE fires — **sub-100-ms measured end-to-end**.
 
 ---
 
@@ -40,7 +48,8 @@ L5  Contract Intel   17 rules · evidence trace (keyword+offset+snippet+conf)
 - **Playbook CSV export** — `GET /playbook/{vendor}.csv` with Jira / Linear / GitHub-Projects-compatible headers (Vendor, Bucket, Section, Owner, SLA_days, Savings_INR, Title, Summary, Frameworks). One-click download button on the Playbook panel header.
 - **Fourth benchmark DPA** — `saas-commodity-dpa` (commodity-SaaS GDPR-era boilerplate, DPDP-silent). Shows the rule engine behaviour on real-world global-SaaS language that isn't clearly weak but is clearly DPDP-uncompliant.
 - **Demo mode v2** — 8-step pitch walk now clicks the Benchmark "Weak DPA" chip (so judges watch the rule engine fire on a reproducible canned DPA) and then flips to the new Compliance Diff sub-tab to show "since last scan" currency.
-- **30/30 tests** passing (27 → 30: +audit bundle, +404 case, +playbook CSV, +saas-commodity benchmark).
+- **Rule engine self-test endpoint** (`GET /selftest`) — runs all 4 benchmark DPAs through Contract Intelligence and verifies every verdict matches the expected one. Reproducible audit with a single curl. Surfaced in the header as a live `selftest: 4/4 ✓` chip (click to re-run).
+- **31/31 tests** passing (27 → 31: +audit bundle, +404 case, +playbook CSV, +saas-commodity benchmark, +selftest harness).
 
 ## What was in v3.1
 

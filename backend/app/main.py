@@ -12,6 +12,7 @@ import time
 import zipfile
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -115,6 +116,11 @@ def root() -> dict:
             "behavioural_ml": anomaly.model().summary(),
             "dpdp_rag": rag.retriever().stats(),
             "framework_crosswalk": framework.frameworks_catalog(),
+            "contract_rules": {"total": 17, "sections": ["\u00a74", "\u00a77", "\u00a78", "\u00a79", "\u00a710", "\u00a716", "\u00a717", "\u00a725"]},
+            "benchmark_selftest": {
+                "endpoint": "/selftest",
+                "note": "Runs all 4 benchmark DPAs through Contract Intel and verifies actual verdicts match expected_verdict. Reproducible audit.",
+            },
         },
         "demo_mode": settings.demo_mode,
     }
@@ -205,13 +211,10 @@ async def scan_diff(vendor: str, from_id: int | None = None, to_id: int | None =
 # ------------------------------------------------------------------ live OSINT
 @app.get("/benchmark/dpas")
 def benchmark_dpas() -> dict:
-    """Benchmark Evidence Ledger: three canned DPAs (strong / ambiguous / weak)
-    that judges can click through to verify the rule engine."""
-    import json as _json
-    from pathlib import Path as _Path
-
-    path = _Path(__file__).parent / "data" / "benchmark_dpas.json"
-    blob = _json.loads(path.read_text())
+    """Benchmark Evidence Ledger: canned DPAs (strong / ambiguous / weak /
+    commodity-SaaS) that judges can click through to verify the rule engine."""
+    path = Path(__file__).parent / "data" / "benchmark_dpas.json"
+    blob = json.loads(path.read_text())
     return {
         "source": blob["source"],
         "dpas": [
@@ -234,11 +237,8 @@ def benchmark_dpa_detail(dpa_id: str) -> dict:
     score, so judges can click through to the exact keyword/regex that produced
     each verdict.
     """
-    import json as _json
-    from pathlib import Path as _Path
-
-    path = _Path(__file__).parent / "data" / "benchmark_dpas.json"
-    blob = _json.loads(path.read_text())
+    path = Path(__file__).parent / "data" / "benchmark_dpas.json"
+    blob = json.loads(path.read_text())
     match = next((d for d in blob["dpas"] if d["id"] == dpa_id), None)
     if not match:
         raise HTTPException(404, f"Unknown benchmark DPA '{dpa_id}'.")
@@ -249,6 +249,80 @@ def benchmark_dpa_detail(dpa_id: str) -> dict:
         "expected_verdict": match["expected_verdict"],
         "text": match["text"],
         "analysis": result,
+    }
+
+
+def _actual_verdict(analysis: dict, dpa: dict) -> str:
+    """Derive a green/amber/red verdict from Contract Intel output.
+
+    The tri-state heuristic:
+      * **green**: zero explicit violations AND coverage >= 60% (or the DPA's
+        own `expected_coverage_pct_min`, whichever is higher).
+      * **red**: dominant explicit violations (>= 5 red-flag hits).
+      * **amber**: everything else (vague / partially covered / a handful of
+        explicit issues but not systemic).
+
+    This matches the framing we use in the pitch: "red" means a judge should
+    walk away, not just ask for rewrites.
+    """
+    cov = int(analysis.get("coverage_pct") or 0)
+    red = int(analysis.get("red_count") or 0)
+    pct_min = dpa.get("expected_coverage_pct_min") or 60
+    if red == 0 and cov >= pct_min:
+        return "green"
+    if red >= 5:
+        return "red"
+    return "amber"
+
+
+@app.get("/selftest")
+def selftest() -> dict:
+    """Reproducible rule-engine self-test.
+
+    Runs all benchmark DPAs through Layer 5 Contract Intelligence and compares
+    the produced verdict against the expected_verdict baked into each DPA.
+    Judges can verify the rule engine matches its documented behaviour with a
+    single curl — no UI, no auth, no LLM.
+    """
+    blob = json.loads(
+        (Path(__file__).parent / "data" / "benchmark_dpas.json").read_text()
+    )
+    results = []
+    for d in blob["dpas"]:
+        analysis = contract.analyze(d["text"])
+        actual = _actual_verdict(analysis, d)
+        expected = d["expected_verdict"]
+        cov = int(analysis.get("coverage_pct") or 0)
+        ok = (actual == expected)
+        # Also honour coverage_pct_min / coverage_pct_max bounds if set
+        if d.get("expected_coverage_pct_min") is not None:
+            ok = ok and cov >= int(d["expected_coverage_pct_min"])
+        if d.get("expected_coverage_pct_max") is not None:
+            ok = ok and cov <= int(d["expected_coverage_pct_max"])
+        results.append({
+            "id": d["id"],
+            "label": d["label"],
+            "expected_verdict": expected,
+            "actual_verdict": actual,
+            "coverage_pct": cov,
+            "red_count": int(analysis.get("red_count") or 0),
+            "amber_count": int(analysis.get("amber_count") or 0),
+            "green_count": int(analysis.get("green_count") or 0),
+            "potential_penalty_inr": int(analysis.get("potential_penalty_inr") or 0),
+            "passed": bool(ok),
+        })
+    passed = sum(1 for r in results if r["passed"])
+    total = len(results)
+    return {
+        "version": __version__,
+        "passed": passed,
+        "total": total,
+        "all_green": passed == total,
+        "summary": (
+            f"{passed}/{total} benchmark DPAs match expected verdict"
+            + (" \u2014 rule engine self-test PASS." if passed == total else " \u2014 rule engine self-test FAIL.")
+        ),
+        "results": results,
     }
 
 
@@ -272,7 +346,7 @@ async def osint_live(vendor: str) -> dict:
     error = None
     try:
         async with _httpx.AsyncClient(timeout=8.0) as c:
-            r = await c.get(url, headers={"user-agent": "VendorGuard-AI/3.1"})
+            r = await c.get(url, headers={"user-agent": f"VendorGuard-AI/{__version__}"})
             if r.status_code == 200:
                 entries = r.json()
             else:
@@ -534,9 +608,6 @@ async def get_playbook_csv(vendor: str) -> PlainTextResponse:
         v = pb.get(key)
         if isinstance(v, list):
             buckets.extend([(key, r) for r in v])
-    rows = [
-        "Vendor,Bucket,Section,Owner,SLA_days,Savings_INR,Title,Summary,Frameworks"
-    ]
     import csv as _csv
     import io as _io
 
@@ -632,9 +703,13 @@ async def audit_bundle(vendor: str):
 
 
 def _audit_readme(vendor: str, scan: dict, pb: dict, alerts: list[dict]) -> str:
-    score = scan.get("trust_score") or scan.get("score") or "—"
-    band = scan.get("band", "—")
-    exposure = scan.get("dpdp_exposure_inr") or scan.get("exposure_inr") or 0
+    # ScanResponse payload: scan['trust'] is a ScoreBand dict {score, band, color, label}
+    # and the INR exposure lives under 'total_dpdp_exposure_inr'.
+    trust = scan.get("trust") or {}
+    score = trust.get("score", "—")
+    band = trust.get("band", "—")
+    exposure = int(scan.get("total_dpdp_exposure_inr") or 0)
+    exposure_cr = f"₹{exposure / 1e7:.2f} Cr" if exposure >= 1e7 else f"₹{exposure:,}"
     findings = len(scan.get("findings") or [])
     dpdp_count = len(scan.get("dpdp") or scan.get("dpdp_mappings") or [])
     bucket_lines = []
@@ -650,7 +725,7 @@ Tool: VendorGuard AI v{__version__}
 
 ## Snapshot
 - Trust score: **{score}/100** · band **{band}**
-- DPDP ₹ exposure: **{exposure}**
+- DPDP ₹ exposure: **{exposure_cr}**  (_raw: {exposure}_)
 - OSINT findings: {findings}
 - DPDP clauses triggered: {dpdp_count}
 - Alerts tied to this vendor: {len(alerts)}

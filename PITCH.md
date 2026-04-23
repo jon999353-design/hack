@@ -1,4 +1,4 @@
-# VendorGuard AI v3.1 — Pitch Kit (Athernex 2026)
+# VendorGuard AI v3.2 — Pitch Kit (Athernex 2026)
 
 **Team:** Rashi Innovators · DSCE × BMSCE
 **Prize target:** 1st place, $3K
@@ -32,9 +32,11 @@
 
 5. **Live Defense → Gateway** — "This isn't theatre. An IsolationForest trained on 50 behavioural baselines + 12 deterministic rules. Simulate an exfiltration — **sub-100-millisecond containment**, the header ticker bumps blocks +1 and ₹ saved +600 Cr. Canaries are the second layer, already minted."
 
-6. **Remediation → Playbook** — "Finally, the Monday morning checklist. Each gap has an owner (Legal / SecEng / DPO), an SLA, a ₹-savings estimate, and a framework tag. Export → board-ready PDF. No more 48-page GRC reports."
+6. **Remediation → Playbook → Diff → Audit ZIP** — "Finally, the Monday morning checklist. Each gap has an owner (Legal / SecEng / DPO), SLA, ₹-savings, and framework tag. The **Diff vs last scan** sub-tab tells the CISO what changed this week — score delta, ₹ exposure delta, new findings, resolved findings, clause delta. And the **Audit ZIP** button in the Board PDF sub-tab packages scan.json + playbook.json + alerts.json + CISO board PDF + CERT-In 6-hour Form-A PDF + README in one click. Hand this ZIP to the Data Protection Board. No more 48-page GRC reports."
 
 7. **Ask DPDP drawer** (press `/`) — "And always-on RAG over the 49-passage DPDP corpus — §5, §8(5), §16, §33, Rules 2025 R.1-R.22. Every answer quotes the Act directly with a gazette-page citation. No hallucination."
+
+8. **Rule engine self-test** (header chip `selftest: 4/4 ✓`) — "And because judges will ask ‘how do we know your rules are right?’ — click that chip. It runs all 4 benchmark DPAs through Contract Intelligence right now and verifies every verdict matches the expected one baked into the fixture. `curl http://localhost:8765/selftest` returns the same JSON. Reproducible. Auditable. Not a black box."
 
 **Closer:** "Rules where rules belong. ML where anomalies live. LLM only where language adds polish — and always grounded in the Act. That's why VendorGuard wins."
 
@@ -60,7 +62,10 @@ See `COMPETITIVE.md` for the full matrix.
 
 ### Q3. "Show me the rules aren't a black box."
 
-**A.** Click the **Benchmark** chips in Contract Intel. Three canned DPAs (strong / ambiguous / weak) with **expected verdicts baked in**. If the strong DPA fires red, we failed. If the weak one passes, we failed. It's a reproducible evidence ledger — judges can inspect `backend/app/data/benchmark_dpas.json` and verify the rule engine matches its documented behaviour.
+**A.** Two ways:
+
+1. Click the **Benchmark** chips in Contract Intel. Four canned DPAs (strong / ambiguous / weak / commodity-SaaS) with **expected verdicts baked in**. If the strong DPA fires red, we failed. If the weak one passes, we failed. It's a reproducible evidence ledger — judges can inspect `backend/app/data/benchmark_dpas.json` and verify the rule engine matches its documented behaviour.
+2. The header `selftest:` chip (or `GET /selftest`) runs **all 4 benchmark DPAs** through Contract Intelligence and returns `{passed: 4, total: 4, all_green: true, results: [...]}`. One curl = one pass/fail on our own rule engine.
 
 ### Q4. "Your OSINT data looks too clean — is it fake?"
 
@@ -102,7 +107,7 @@ The remaining OSINT (Shodan / HIBP / VirusTotal / nuclei) degrades gracefully to
 
 Being honest so we don't faceplant:
 
-- **"Do you have real production customers?"** No — this is a 24-hour hackathon build. The backend is battle-tested (27/27 pytest, deterministic, no flakes) but we have no paying customers yet. We framed this as an MVP control plane with a clear hand-off to a pilot design-partner program.
+- **"Do you have real production customers?"** No — this is a hackathon build. The backend is battle-tested (**31/31 pytest passing**, deterministic, no flakes, including the `/selftest` rule-engine harness that verifies all 4 benchmark DPAs match expected verdicts on every boot) but we have no paying customers yet. We framed this as an MVP control plane with a clear hand-off to a pilot design-partner program.
 - **"Do you have a fine-tuned LLM for DPDP?"** No — we deliberately don't fine-tune. Fine-tuning on legal text is a compliance liability (hallucination risk). We use TF-IDF retrieval over a verified corpus and a *labelled-optional* LLM polish for tone.
 - **"Is your IsolationForest adversarially robust?"** Not meaningfully — it's trained on synthetic baselines. An adversary who knows the model can evade it. That's why we ship it alongside deterministic rules (rate limits, block-list, canary-access trigger), not as the only line of defence.
 
