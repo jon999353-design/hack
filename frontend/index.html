@@ -895,6 +895,23 @@
       if (panelId === 'diff') refreshDiffPanel().catch(() => {});
     }
 
+    // v3.2: Ensure Remediation > Board PDF · Audit ZIP card always reflects the
+    // current lastScan, even if the user scanned from the header while already
+    // viewing that sub-tab (renderOverview's DOM update can race with the UI route).
+    function ensureReportCard() {
+      if (!lastScan || !lastScan.vendor) return;
+      const empty = document.getElementById('report-empty');
+      const card = document.getElementById('report-card');
+      if (!empty || !card) return;
+      empty.classList.add('hidden');
+      card.classList.remove('hidden');
+      const v = document.getElementById('report-vendor'); if (v) v.textContent = lastScan.vendor;
+      const rdl = document.getElementById('report-dl');
+      if (rdl) rdl.href = `${API}/report/${encodeURIComponent(lastScan.vendor)}.pdf`;
+      const adl = document.getElementById('audit-dl');
+      if (adl) adl.href = `${API}/audit/${encodeURIComponent(lastScan.vendor)}.zip`;
+    }
+
     function navTo(id) {
       // Support being called with either a top-level nav id OR a direct panel id.
       if (GROUP_OF[id]) {
@@ -902,6 +919,8 @@
         $$('#sidebar-nav button').forEach(b => b.classList.toggle('active', b.dataset.nav === navId));
         renderSubTabs(navId);
         showPanel(id);
+        if (id === 'report') ensureReportCard();
+        if (id === 'diff') { try { refreshDiffPanel(); } catch {} }
         return;
       }
       const nav = NAV_ITEMS.find(n => n.id === id);
@@ -909,6 +928,8 @@
       $$('#sidebar-nav button').forEach(b => b.classList.toggle('active', b.dataset.nav === id));
       renderSubTabs(id);
       showPanel(nav.panels[0].id);
+      if (nav.panels[0].id === 'report') ensureReportCard();
+      if (nav.panels[0].id === 'diff') { try { refreshDiffPanel(); } catch {} }
     }
 
     // =========================================================================
