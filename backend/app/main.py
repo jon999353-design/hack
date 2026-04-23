@@ -16,11 +16,31 @@ from sse_starlette.sse import EventSourceResponse
 
 from app import __version__
 from app.config import settings
-from app.modules import ai_risk, alerts, anomaly, canary, dpdp, events, gateway, osint, rag, report, store, trust_score
+from app.modules import (
+    ai_risk,
+    alerts,
+    anomaly,
+    canary,
+    contract,
+    dpdp,
+    events,
+    framework,
+    gateway,
+    incident,
+    osint,
+    playbook,
+    portfolio,
+    rag,
+    report,
+    store,
+    trust_score,
+)
 from app.schemas import (
     ActivateGatewayRequest,
     AlertEvent,
+    BulkScanRequest,
     CanaryToken,
+    ContractAnalyzeRequest,
     GatewayStatus,
     GraphEdge,
     GraphNode,
@@ -74,10 +94,19 @@ def root() -> dict:
             "nuclei": settings.has_nuclei,
             "ai": settings.has_ai,
             "whatsapp": settings.has_twilio,
+            "webhook": settings.has_webhook,
+        },
+        "layers": {
+            "L1_pre_onboarding": "OSINT scan (Shodan/HIBP/crt.sh/VT/DNS/TLS/nuclei)",
+            "L2_trust_score": "Weighted-and-capped 0-100 explainable scorer",
+            "L3_dpdp_mapper": "Findings → DPDP clauses + RAG quotes",
+            "L4_gateway": "IsolationForest + policy + autonomous response",
+            "L5_contract_intel": "DPA gap analysis + rewrite suggestions",
         },
         "engines": {
             "behavioural_ml": anomaly.model().summary(),
             "dpdp_rag": rag.retriever().stats(),
+            "framework_crosswalk": framework.frameworks_catalog(),
         },
         "demo_mode": settings.demo_mode,
     }
@@ -324,3 +353,120 @@ async def canary_trip(token_id: str, payload: dict | None = None) -> CanaryToken
 @app.get("/canary", response_model=list[CanaryToken])
 async def canary_list(vendor: str | None = Query(None)) -> list[CanaryToken]:
     return await canary.list_for(vendor.lower() if vendor else None)
+
+
+# ------------------------------------------------------------------ framework
+@app.get("/framework/crosswalk")
+def framework_crosswalk() -> dict:
+    """DPDP § → ISO 27001 / SOC 2 / NIST CSF crosswalk."""
+    return framework.full_crosswalk()
+
+
+# ------------------------------------------------------------------ contract intel (Layer 5)
+@app.post("/contract/analyze")
+async def contract_analyze(req: ContractAnalyzeRequest) -> dict:
+    """Drop a vendor DPA → structured DPDP gap list + rewrite suggestions.
+
+    This is Layer 5 (Contract Intelligence) from the deck, now live.
+    """
+    result = contract.analyze(req.contract_text or "")
+    if req.polish_rewrites and settings.has_ai:
+        for g in result["gaps"]:
+            g["recommended_rewrite"] = await contract.polish_rewrite(
+                g["label"], g["recommended_rewrite"]
+            )
+    return result
+
+
+# ------------------------------------------------------------------ remediation playbook
+@app.get("/playbook/{vendor}")
+async def get_playbook(vendor: str) -> dict:
+    vendor = vendor.strip().lower()
+    scan = await store.load_scan(vendor)
+    if not scan:
+        raise HTTPException(404, f"No scan yet for '{vendor}'. POST /scan first.")
+    return playbook.build_for(scan)
+
+
+# ------------------------------------------------------------------ executive / portfolio
+@app.get("/portfolio")
+async def get_portfolio() -> dict:
+    """Executive board view — aggregate KPIs across every scanned vendor."""
+    return await portfolio.build()
+
+
+@app.get("/kpis")
+async def get_kpis() -> dict:
+    """Lightweight KPI tiles for the header ticker (cheap, no crosswalk fanout)."""
+    vendors = await store.list_vendors()
+    all_alerts = await store.recent_alerts(500)
+    blocked = [a for a in all_alerts if a.get("severity") in ("critical", "high")]
+    return {
+        "vendors_tracked": len(vendors),
+        "attacks_blocked": len(blocked),
+        "savings_inr": int(sum(int(a.get("dpdp_exposure_inr") or 0) for a in blocked)),
+        "total_exposure_inr": int(sum(int(v.get("exposure_inr") or 0) for v in vendors)),
+    }
+
+
+# ------------------------------------------------------------------ bulk vendor onboarding
+@app.post("/vendors/bulk")
+async def bulk_scan(req: BulkScanRequest) -> dict:
+    """Scan up to 25 vendors in parallel — for CSV / multi-vendor onboarding."""
+    domains = [v.strip().lower() for v in (req.vendors or []) if v and v.strip()]
+    if not domains:
+        raise HTTPException(400, "No vendors provided.")
+    domains = domains[:25]
+
+    async def _one(d: str) -> dict:
+        try:
+            findings = await osint.run_osint(d)
+            mappings = dpdp.map_findings(findings)
+            exposure = dpdp.total_exposure(mappings)
+            score = trust_score.compute_score(findings)
+            summary = await ai_risk.summarise(d, findings, mappings, exposure)
+            resp = ScanResponse(
+                vendor=d,
+                scanned_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                duration_ms=0,
+                findings=findings,
+                dpdp=mappings,
+                ai_summary=summary,
+                trust=score,
+                total_dpdp_exposure_inr=exposure,
+            )
+            await store.save_scan(d, resp.model_dump())
+            events.publish(
+                "scans",
+                {"vendor": d, "trust": score.model_dump(), "exposure_inr": exposure},
+            )
+            return {
+                "vendor": d,
+                "score": score.score,
+                "band": score.band,
+                "exposure_inr": exposure,
+                "findings": len(findings),
+            }
+        except Exception as e:
+            return {"vendor": d, "error": str(e)}
+
+    results = await asyncio.gather(*(_one(d) for d in domains))
+    return {"count": len(results), "results": results}
+
+
+# ------------------------------------------------------------------ CERT-In incident report
+@app.get("/incident/{alert_id}.pdf")
+async def incident_pdf(alert_id: str):
+    """Pre-filled CERT-In / DPB 6-hour incident report PDF for an alert."""
+    rows = await store.recent_alerts(500)
+    alert = next((a for a in rows if a.get("id") == alert_id), None)
+    if not alert:
+        raise HTTPException(404, f"No alert '{alert_id}'.")
+    scan = await store.load_scan(alert.get("vendor", ""))
+    pdf = incident.render_pdf(alert, scan)
+    filename = f"cert-in-incident-{alert_id}.pdf"
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
