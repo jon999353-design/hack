@@ -309,3 +309,30 @@ def test_osint_live_endpoint(client):
     assert "verify_url" in body and "crt.sh" in body["verify_url"]
     assert "latency_ms" in body
     assert isinstance(body["subdomains"], list)
+
+
+def test_scan_history_and_diff(client):
+    """v3.1: repeat-scanning a vendor builds a history, and /scan/{v}/diff
+    returns a structured diff comparing the latest two snapshots."""
+    v = "databridge-cloud.com"
+    # First scan (baseline) — already executed earlier via test_scan_unknown_vendor.
+    # Make sure we have at least one fresh scan then a second snapshot.
+    client.post("/scan", json={"vendor": v})
+    client.post("/scan", json={"vendor": v})
+
+    hist = client.get(f"/scan/{v}/history").json()
+    assert hist["count"] >= 2
+    assert all("score" in row and "exposure_inr" in row for row in hist["history"])
+
+    d = client.get(f"/scan/{v}/diff").json()
+    assert "summary" in d
+    assert "score_delta" in d
+    # Schema coverage: every expected key is present.
+    for k in (
+        "new_findings",
+        "resolved_findings",
+        "unchanged_findings",
+        "new_clauses",
+        "resolved_clauses",
+    ):
+        assert k in d

@@ -21,6 +21,7 @@ from app.modules import (
     alerts,
     anomaly,
     canary,
+    compliance_diff,
     contract,
     dpdp,
     events,
@@ -162,6 +163,39 @@ async def get_scan(vendor: str) -> ScanResponse:
 @app.get("/vendors")
 async def vendors() -> dict:
     return {"vendors": await store.list_vendors()}
+
+
+# ------------------------------------------------------------------ scan history / diff
+@app.get("/scan/{vendor}/history")
+async def scan_history(vendor: str, limit: int = Query(20, ge=1, le=200)) -> dict:
+    vendor = vendor.strip().lower()
+    rows = await store.scan_history(vendor, limit)
+    return {"vendor": vendor, "count": len(rows), "history": rows}
+
+
+@app.get("/scan/{vendor}/diff")
+async def scan_diff(vendor: str, from_id: int | None = None, to_id: int | None = None) -> dict:
+    """Compare two scans for a vendor.
+
+    Defaults to diffing the two most recent scans; pass `from_id` / `to_id`
+    query params to select any two historical snapshots by their numeric id.
+    """
+    vendor = vendor.strip().lower()
+    rows = await store.scan_history(vendor, 200)
+    if len(rows) == 0:
+        raise HTTPException(404, f"No scans for '{vendor}'. POST /scan first.")
+    # Default: compare the latest two
+    if from_id is None and to_id is None:
+        if len(rows) < 2:
+            new = await store.load_scan(vendor)
+            return {"vendor": vendor, **compliance_diff.diff(None, new)}
+        to_id = rows[0]["id"]
+        from_id = rows[1]["id"]
+    old = await store.scan_by_id(from_id) if from_id else None
+    new = await store.scan_by_id(to_id) if to_id else None
+    if new is None:
+        new = await store.load_scan(vendor)
+    return {"vendor": vendor, "from_id": from_id, "to_id": to_id, **compliance_diff.diff(old, new)}
 
 
 # ------------------------------------------------------------------ live OSINT

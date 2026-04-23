@@ -20,6 +20,15 @@ CREATE TABLE IF NOT EXISTS scans (
     scanned_at TEXT NOT NULL,
     data TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS scan_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vendor TEXT NOT NULL,
+    scanned_at TEXT NOT NULL,
+    score INTEGER,
+    band TEXT,
+    exposure_inr INTEGER,
+    data TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS alerts (
     id TEXT PRIMARY KEY,
     vendor TEXT NOT NULL,
@@ -39,6 +48,7 @@ CREATE TABLE IF NOT EXISTS canary_tokens (
 );
 CREATE INDEX IF NOT EXISTS idx_alerts_vendor ON alerts(vendor);
 CREATE INDEX IF NOT EXISTS idx_alerts_at ON alerts(at);
+CREATE INDEX IF NOT EXISTS idx_scan_history_vendor ON scan_history(vendor, scanned_at);
 """
 
 
@@ -50,13 +60,54 @@ async def init_db() -> None:
 
 # ------------------------------------------------------------------ scans
 async def save_scan(vendor: str, result: dict[str, Any]) -> None:
+    blob = json.dumps(result)
+    score = (result.get("trust") or {}).get("score")
+    band = (result.get("trust") or {}).get("band")
+    exposure = int(result.get("total_dpdp_exposure_inr") or 0)
+    scanned_at = result.get("scanned_at", "")
     async with aiosqlite.connect(settings.sqlite_path) as db:
         await db.execute(
             "INSERT INTO scans(vendor, scanned_at, data) VALUES(?,?,?) "
             "ON CONFLICT(vendor) DO UPDATE SET scanned_at=excluded.scanned_at, data=excluded.data",
-            (vendor, result.get("scanned_at", ""), json.dumps(result)),
+            (vendor, scanned_at, blob),
+        )
+        await db.execute(
+            "INSERT INTO scan_history(vendor, scanned_at, score, band, exposure_inr, data) "
+            "VALUES(?,?,?,?,?,?)",
+            (vendor, scanned_at, score, band, exposure, blob),
         )
         await db.commit()
+
+
+async def scan_history(vendor: str, limit: int = 20) -> list[dict]:
+    async with aiosqlite.connect(settings.sqlite_path) as db:
+        cur = await db.execute(
+            "SELECT id, scanned_at, score, band, exposure_inr FROM scan_history "
+            "WHERE vendor=? ORDER BY id DESC LIMIT ?",
+            (vendor, limit),
+        )
+        rows = await cur.fetchall()
+    return [
+        {
+            "id": r[0],
+            "scanned_at": r[1],
+            "score": r[2],
+            "band": r[3],
+            "exposure_inr": r[4],
+        }
+        for r in rows
+    ]
+
+
+async def scan_by_id(scan_id: int) -> dict | None:
+    async with aiosqlite.connect(settings.sqlite_path) as db:
+        cur = await db.execute(
+            "SELECT vendor, scanned_at, data FROM scan_history WHERE id=?", (scan_id,)
+        )
+        row = await cur.fetchone()
+    if not row:
+        return None
+    return json.loads(row[2])
 
 
 async def load_scan(vendor: str) -> dict | None:
