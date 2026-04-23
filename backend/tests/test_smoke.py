@@ -311,6 +311,21 @@ def test_osint_live_endpoint(client):
     assert isinstance(body["subdomains"], list)
 
 
+def test_benchmark_ledger(client):
+    """v3.1: the Evidence Ledger must expose 3 canned DPAs (strong/ambiguous/weak)
+    and every detail call must return full gap analysis with evidence trace."""
+    r = client.get("/benchmark/dpas")
+    assert r.status_code == 200
+    ids = {d["id"] for d in r.json()["dpas"]}
+    assert ids == {"strong-dpa", "ambiguous-dpa", "weak-dpa"}
+    # Strong DPA ≥ 60% coverage; weak DPA ≤ 25%
+    strong = client.get("/benchmark/dpas/strong-dpa").json()
+    assert strong["analysis"]["coverage_pct"] >= 60
+    weak = client.get("/benchmark/dpas/weak-dpa").json()
+    assert weak["analysis"]["coverage_pct"] <= 25
+    assert weak["analysis"]["red_count"] >= 3
+
+
 def test_scan_history_and_diff(client):
     """v3.1: repeat-scanning a vendor builds a history, and /scan/{v}/diff
     returns a structured diff comparing the latest two snapshots."""

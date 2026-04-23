@@ -199,6 +199,55 @@ async def scan_diff(vendor: str, from_id: int | None = None, to_id: int | None =
 
 
 # ------------------------------------------------------------------ live OSINT
+@app.get("/benchmark/dpas")
+def benchmark_dpas() -> dict:
+    """Benchmark Evidence Ledger: three canned DPAs (strong / ambiguous / weak)
+    that judges can click through to verify the rule engine."""
+    import json as _json
+    from pathlib import Path as _Path
+
+    path = _Path(__file__).parent / "data" / "benchmark_dpas.json"
+    blob = _json.loads(path.read_text())
+    return {
+        "source": blob["source"],
+        "dpas": [
+            {
+                "id": d["id"],
+                "label": d["label"],
+                "expected_verdict": d["expected_verdict"],
+                "length": len(d["text"]),
+            }
+            for d in blob["dpas"]
+        ],
+    }
+
+
+@app.get("/benchmark/dpas/{dpa_id}")
+def benchmark_dpa_detail(dpa_id: str) -> dict:
+    """Return a canned DPA analyzed through Layer 5 Contract Intelligence.
+
+    The `gaps[]` array contains the full evidence/red-flag trace and confidence
+    score, so judges can click through to the exact keyword/regex that produced
+    each verdict.
+    """
+    import json as _json
+    from pathlib import Path as _Path
+
+    path = _Path(__file__).parent / "data" / "benchmark_dpas.json"
+    blob = _json.loads(path.read_text())
+    match = next((d for d in blob["dpas"] if d["id"] == dpa_id), None)
+    if not match:
+        raise HTTPException(404, f"Unknown benchmark DPA '{dpa_id}'.")
+    result = contract.analyze(match["text"])
+    return {
+        "id": match["id"],
+        "label": match["label"],
+        "expected_verdict": match["expected_verdict"],
+        "text": match["text"],
+        "analysis": result,
+    }
+
+
 @app.get("/osint/live/{vendor}")
 async def osint_live(vendor: str) -> dict:
     """Live, key-less OSINT for a domain.
