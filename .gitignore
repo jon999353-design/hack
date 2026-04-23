@@ -32,3 +32,8 @@ node_modules/
 # Secrets
 backend/.env
 frontend/config.local.js
+
+# Demo recording intermediates (keep voiceover MP3 + final MP4 in git,
+# drop the raw Playwright WebM capture because ffmpeg regenerates it).
+out/*.webm
+out/_*
