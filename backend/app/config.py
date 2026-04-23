@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     twilio_whatsapp_from: str = "whatsapp:+14155238886"
     alert_whatsapp_to: str = ""
 
+    # Generic webhook (Slack / MS Teams / PagerDuty / Zapier) — any POST-JSON target
+    alert_webhook_url: str = ""
+
     # App
     app_env: str = "dev"
     app_host: str = "0.0.0.0"
@@ -78,6 +81,10 @@ class Settings(BaseSettings):
     def has_nuclei(self) -> bool:
         """True if the `nuclei` binary is on PATH."""
         return shutil.which(self.nuclei_bin) is not None
+
+    @property
+    def has_webhook(self) -> bool:
+        return bool(self.alert_webhook_url)
 
 
 settings = Settings()

@@ -27,6 +27,7 @@ class DPDPMapping(BaseModel):
     liability_note: str
     rag_quote: str | None = None   # verbatim excerpt from the Act (P1 RAG)
     rag_citation: str | None = None  # e.g. "DPDP Act 2023, §8(5), Gazette p. 7"
+    crosswalk: dict = Field(default_factory=dict)  # ISO27001 / SOC2 / NIST controls
 
 
 class ScoreBand(BaseModel):
@@ -116,3 +117,12 @@ class RAGAnswer(BaseModel):
     query: str
     answer: str
     citations: list[dict]  # [{section, page, excerpt}]
+
+
+class ContractAnalyzeRequest(BaseModel):
+    contract_text: str
+    polish_rewrites: bool = False  # set True to LLM-polish recommended rewrites
+
+
+class BulkScanRequest(BaseModel):
+    vendors: list[str]  # list of domains to scan
