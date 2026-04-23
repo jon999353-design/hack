@@ -150,8 +150,13 @@ def test_root_exposes_ai_and_engines(client):
     body = r.json()
     assert "integrations" in body
     assert "ai" in body["integrations"]
+    # v3.1: crt.sh / DNS / TLS are always-on live integrations (no key required)
+    assert body["integrations"]["crt_sh"] is True
+    assert body["integrations"]["dns"] is True
+    assert body["integrations"]["tls"] is True
     assert "dpdp_rag" in body["engines"]
-    assert body["engines"]["dpdp_rag"]["passages"] >= 10
+    # v3.1: expanded RAG corpus (Act + Rules 2025)
+    assert body["engines"]["dpdp_rag"]["passages"] >= 40
 
 
 def test_canary_list(client):
