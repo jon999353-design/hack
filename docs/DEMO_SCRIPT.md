@@ -31,22 +31,23 @@ hundred. Block band.
 [CUE: DPDP Exposure panel — clauses expand, ₹600 Cr counter climbs]
 
 Here is where we go beyond every other vendor-risk tool. Every single
-finding is mapped to a specific DPDP Act clause — section 8(5),
-8(6), 16 — with the verbatim gazette excerpt, the rupee penalty, and
-the data fiduciary's immediate action. Six hundred crores of
-potential exposure on this one vendor, visible at a glance.
+finding is mapped to a specific DPDP Act clause — section 5,
+section 8(5), 8(6), and 8(8) — with the verbatim gazette excerpt,
+the rupee penalty, and the data fiduciary's immediate action. Six
+hundred crores of potential exposure on this one vendor, visible at
+a glance.
 
 [CUE: Gateway panel — Activate, then Simulate Attack fires, timer ticks]
 
 Now the attack. A rogue vendor process tries to pull ten thousand
 records. The IsolationForest anomaly detector and deterministic policy
 engine catch it instantly. Wall-clock containment — measured, not
-estimated — forty-five milliseconds. WhatsApp alert fired.
+estimated — forty-three milliseconds. WhatsApp alert fired.
 CERT-In six-hour incident report auto-drafted.
 
 [CUE: Contract Intel panel — 17 rules render with red/amber/green + confidence]
 
-Layer five: contract intelligence. Seventeen DPDP rules run over the
+Layer five: contract intelligence. Sixteen DPDP rules run over the
 vendor's data processing agreement. Each verdict carries a confidence
 score, the exact keyword and offset that triggered it, and a
 ready-to-counter-sign rewrite grounded in the gazette quote.

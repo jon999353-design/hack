@@ -34,7 +34,7 @@ OUT_MP3 = OUT_DIR / "demo-voiceover.mp3"
 
 ENDPOINT = "https://api.sarvam.ai/text-to-speech"
 MODEL = "bulbul:v3"
-SPEAKER = os.environ.get("SARVAM_SPEAKER", "rahul")  # male Indian English (bulbul:v3)
+SPEAKER = os.environ.get("SARVAM_SPEAKER", "priya")  # female Indian English (bulbul:v3) — clearest diction
 LANGUAGE = "en-IN"
 PACE = float(os.environ.get("SARVAM_PACE", "1.0"))
 SAMPLE_RATE = 22050
