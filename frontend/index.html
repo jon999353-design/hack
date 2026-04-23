@@ -1,0 +1,1314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="vg-api" content="__VG_API__" />
+  <title>VendorGuard AI — Vendor Access Control Plane</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
+  <script src="./config.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root { font-family: 'Inter', ui-sans-serif, system-ui; }
+    body { font-family: 'Inter', ui-sans-serif, system-ui; }
+    .mono { font-family: 'Space Mono', ui-monospace, monospace; }
+
+    @keyframes pulseBorder {
+      0%,100% { box-shadow: 0 0 0 0 rgba(244,63,94,0.65); }
+      50%     { box-shadow: 0 0 0 14px rgba(244,63,94,0); }
+    }
+    .alert-pulse { animation: pulseBorder 1.4s ease-in-out infinite; }
+
+    @keyframes rowPulse {
+      0%,100% { background-color: rgba(244,63,94,0.0); }
+      50%     { background-color: rgba(244,63,94,0.15); }
+    }
+    .row-pulse { animation: rowPulse 1s ease-in-out 2; }
+
+    @keyframes glowPulse {
+      0%,100% { text-shadow: 0 0 20px rgba(244,63,94,0.5); }
+      50%     { text-shadow: 0 0 40px rgba(244,63,94,0.9); }
+    }
+    .containment-number { animation: glowPulse 1.2s ease-in-out infinite; }
+
+    .glow-gold { text-shadow: 0 0 24px rgba(234,179,8,0.25); }
+    .scroll-fade { mask-image: linear-gradient(to bottom, black 85%, transparent); }
+
+    /* Sidebar active indicator */
+    .nav-btn {
+      border-left: 3px solid transparent;
+      transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+    }
+    .nav-btn:hover { background: rgba(245, 158, 11, 0.06); }
+    .nav-btn.active {
+      border-left-color: #f59e0b;
+      background: rgba(245, 158, 11, 0.10);
+      color: #fde68a;
+    }
+
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* cytoscape container */
+    #graph { width: 100%; height: 500px; }
+
+    /* Custom scrollbar for the dark theme */
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 8px; }
+    ::-webkit-scrollbar-thumb:hover { background: #334155; }
+
+    /* Buttons */
+    .btn-primary { background: #f59e0b; color: #0f172a; font-weight: 600; }
+    .btn-primary:hover:not(:disabled) { background: #fbbf24; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-danger { background: #e11d48; color: #0f172a; font-weight: 600; }
+    .btn-danger:hover:not(:disabled) { background: #f43f5e; }
+    .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-safe { background: #10b981; color: #0f172a; font-weight: 600; }
+    .btn-safe:hover:not(:disabled) { background: #34d399; }
+    .btn-safe:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-ghost { border: 1px solid #334155; color: #cbd5e1; background: transparent; }
+    .btn-ghost:hover:not(:disabled) { border-color: #f59e0b; color: #fde68a; }
+    .btn-ghost:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-indigo { background: #6366f1; color: #f1f5f9; font-weight: 600; }
+    .btn-indigo:hover:not(:disabled) { background: #818cf8; }
+
+    .chip {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.25rem 0.55rem; border-radius: 999px;
+      font-size: 11px; font-weight: 500;
+      background: rgba(148,163,184,0.08); color: #cbd5e1;
+      border: 1px solid rgba(148,163,184,0.15);
+    }
+    .chip.active { background: rgba(245,158,11,0.15); color: #fde68a; border-color: rgba(245,158,11,0.4); }
+    .chip.clickable { cursor: pointer; }
+    .chip.clickable:hover { border-color: rgba(245,158,11,0.45); color: #fde68a; }
+
+    .badge-sev { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; padding: 2px 8px; border-radius: 6px; border: 1px solid; font-weight: 600; }
+    .sev-critical { color: #fda4af; background: rgba(244,63,94,0.1); border-color: rgba(244,63,94,0.4); }
+    .sev-high     { color: #fdba74; background: rgba(249,115,22,0.1); border-color: rgba(249,115,22,0.4); }
+    .sev-medium   { color: #fcd34d; background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.4); }
+    .sev-low      { color: #7dd3fc; background: rgba(14,165,233,0.1); border-color: rgba(14,165,233,0.4); }
+
+    .src-chip { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #1e293b; color: #94a3b8; }
+    .src-shodan    { background: rgba(239,68,68,0.15); color: #fca5a5; }
+    .src-hibp      { background: rgba(168,85,247,0.15); color: #d8b4fe; }
+    .src-virustotal{ background: rgba(34,197,94,0.15); color: #86efac; }
+    .src-nuclei    { background: rgba(236,72,153,0.15); color: #f9a8d4; }
+    .src-tls       { background: rgba(14,165,233,0.15); color: #7dd3fc; }
+    .src-dns       { background: rgba(234,179,8,0.15); color: #fde047; }
+    .src-crtsh     { background: rgba(99,102,241,0.15); color: #a5b4fc; }
+    .src-dpdp      { background: rgba(245,158,11,0.15); color: #fcd34d; }
+
+    .demo-badge {
+      background: linear-gradient(90deg, #f59e0b, #ef4444);
+      color: #0f172a; font-weight: 700; font-size: 11px;
+      padding: 4px 10px; border-radius: 999px;
+    }
+
+    details > summary { list-style: none; cursor: pointer; }
+    details > summary::-webkit-details-marker { display: none; }
+    details[open] .chev { transform: rotate(90deg); }
+    .chev { display: inline-block; transition: transform 160ms ease; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+
+  <!-- =================== TOP BAR =================== -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-30">
+    <div class="flex items-center gap-4 px-5 py-3">
+      <!-- Logo -->
+      <div class="flex items-center gap-3 w-[228px] shrink-0">
+        <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 grid place-items-center text-slate-900 font-black">V</div>
+        <div class="leading-tight">
+          <div class="text-sm font-bold tracking-tight">VendorGuard <span class="text-amber-400">AI</span></div>
+          <div class="text-[10px] text-slate-400 mono">DPDP vendor control plane</div>
+        </div>
+      </div>
+
+      <!-- Vendor input + scan -->
+      <div class="flex-1 flex items-center gap-2 min-w-0">
+        <input id="vendor-input" type="text" value="paytrust-partner.com"
+               class="flex-1 min-w-0 bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-sm mono focus:outline-none focus:border-amber-400"
+               placeholder="vendor domain, e.g. paytrust-partner.com" />
+        <button id="scan-btn" class="btn-primary px-4 py-2 rounded-lg text-sm disabled:pointer-events-none">
+          Scan Vendor
+        </button>
+      </div>
+
+      <!-- Integration chips -->
+      <div class="hidden lg:flex items-center gap-1.5">
+        <span id="api-status" class="chip mono">api: …</span>
+        <span id="ml-chip" class="chip mono hidden">ml: …</span>
+        <span id="nuclei-chip" class="chip mono hidden">nuclei: …</span>
+        <span id="rag-chip" class="chip mono hidden">rag: …</span>
+        <span class="chip mono" style="color:#6ee7b7; border-color:rgba(16,185,129,0.4); background:rgba(16,185,129,0.08)">v2.1.0</span>
+      </div>
+
+      <!-- Demo mode button + badge -->
+      <div class="flex items-center gap-2">
+        <span id="demo-badge" class="demo-badge hidden">DEMO RUNNING…</span>
+        <button id="demo-btn" class="btn-ghost px-3 py-2 rounded-lg text-xs mono" title="Run the scripted pitch demo (Ctrl+Shift+D)">
+          ▶ Demo Mode
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- =================== LAYOUT =================== -->
+  <div class="flex">
+
+    <!-- =================== SIDEBAR =================== -->
+    <aside class="w-[240px] shrink-0 border-r border-slate-800 bg-slate-900/40 min-h-[calc(100vh-57px)] flex flex-col">
+      <nav id="sidebar-nav" class="py-3 text-sm">
+        <!-- nav items injected by JS -->
+      </nav>
+
+      <div class="px-4 pt-2 pb-3 mt-2 border-t border-slate-800">
+        <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Recent vendors</div>
+        <div id="vendor-history" class="flex flex-wrap gap-1.5">
+          <span class="text-xs text-slate-600 italic">no scans yet</span>
+        </div>
+      </div>
+
+      <div class="mt-auto px-4 py-3 border-t border-slate-800 text-[10px] text-slate-500 leading-snug">
+        Built for <span class="text-amber-400 font-semibold">Athernex 2026</span><br/>
+        Team Rashi Innovators · DSCE × BMSCE
+      </div>
+    </aside>
+
+    <!-- =================== MAIN =================== -->
+    <main class="flex-1 min-w-0 p-6">
+
+      <!-- ====== OVERVIEW PANEL ====== -->
+      <section data-panel="overview" class="panel active space-y-6">
+        <div class="flex items-start justify-between flex-wrap gap-3">
+          <div>
+            <h1 class="text-2xl font-bold tracking-tight">Trust Overview</h1>
+            <p class="text-sm text-slate-400">Weighted trust score 0–100, AI-drafted board summary, and scan provenance.</p>
+          </div>
+          <div id="scan-meta" class="text-[11px] mono text-slate-500"></div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <!-- Trust score card -->
+          <div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 grid place-items-center">
+            <div class="text-[11px] uppercase tracking-widest text-slate-400">Trust Score</div>
+            <div id="score-ring" class="relative mt-3">
+              <svg viewBox="0 0 120 120" class="w-44 h-44 -rotate-90">
+                <circle cx="60" cy="60" r="54" fill="none" stroke="#1e293b" stroke-width="10"/>
+                <circle id="score-arc" cx="60" cy="60" r="54" fill="none" stroke="#64748b" stroke-width="10" stroke-linecap="round"
+                        stroke-dasharray="339.29" stroke-dashoffset="339.29"
+                        style="transition: stroke-dashoffset 1.2s cubic-bezier(.2,.8,.2,1), stroke 800ms ease;"/>
+              </svg>
+              <div class="absolute inset-0 grid place-items-center">
+                <div id="score-num" class="text-5xl font-bold mono">—</div>
+              </div>
+            </div>
+            <div id="score-band" class="mt-4 px-3 py-1 rounded-full text-xs font-semibold border border-slate-700 text-slate-400">
+              awaiting scan
+            </div>
+            <div class="mt-4 grid grid-cols-3 gap-2 w-full text-center">
+              <div class="rounded-lg bg-slate-950/60 border border-slate-800 py-2">
+                <div id="stat-findings" class="text-lg font-bold mono text-amber-300">–</div>
+                <div class="text-[10px] uppercase tracking-wider text-slate-500">findings</div>
+              </div>
+              <div class="rounded-lg bg-slate-950/60 border border-slate-800 py-2">
+                <div id="stat-sources" class="text-lg font-bold mono text-indigo-300">–</div>
+                <div class="text-[10px] uppercase tracking-wider text-slate-500">sources</div>
+              </div>
+              <div class="rounded-lg bg-slate-950/60 border border-slate-800 py-2">
+                <div id="stat-ms" class="text-lg font-bold mono text-emerald-300">–</div>
+                <div class="text-[10px] uppercase tracking-wider text-slate-500">ms</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- AI summary + exposure -->
+          <div class="lg:col-span-2 rounded-2xl border border-slate-800 bg-slate-900/50 p-6 flex flex-col">
+            <div class="flex items-center justify-between gap-3">
+              <h2 class="text-lg font-semibold">AI Risk Summary</h2>
+              <span class="text-[11px] text-slate-500 mono">Claude / GPT · grounded in DPDP RAG</span>
+            </div>
+            <p id="ai-summary" class="text-slate-300 leading-relaxed mt-3 flex-1 whitespace-pre-line">
+              Run a scan to generate a board-ready risk summary. Every claim maps to an OSINT finding or a verbatim DPDP Act clause.
+            </p>
+
+            <div class="mt-4 pt-4 border-t border-slate-800 flex items-center justify-between flex-wrap gap-3">
+              <div>
+                <div class="text-[10px] uppercase tracking-wider text-slate-500">Total DPDP exposure</div>
+                <div id="exposure-total" class="text-2xl font-bold mono text-rose-300 mt-0.5">—</div>
+              </div>
+              <div class="flex gap-2 flex-wrap">
+                <button id="jump-findings" class="btn-ghost px-3 py-1.5 rounded-lg text-xs">Review findings →</button>
+                <button id="jump-dpdp" class="btn-ghost px-3 py-1.5 rounded-lg text-xs">Review DPDP exposure →</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====== FINDINGS PANEL ====== -->
+      <section data-panel="findings" class="panel space-y-4">
+        <div class="flex items-start justify-between flex-wrap gap-3">
+          <div>
+            <h1 class="text-2xl font-bold tracking-tight">OSINT Findings</h1>
+            <p class="text-sm text-slate-400">Evidence surfaced by Shodan, HaveIBeenPwned, crt.sh, VirusTotal, DNS, TLS, and ProjectDiscovery nuclei.</p>
+          </div>
+          <div id="findings-filter" class="flex items-center gap-1.5">
+            <button data-f="all" class="chip clickable active">All</button>
+            <button data-f="critical" class="chip clickable">Critical</button>
+            <button data-f="high" class="chip clickable">High</button>
+            <button data-f="medium" class="chip clickable">Medium</button>
+            <button data-f="low" class="chip clickable">Low</button>
+          </div>
+        </div>
+        <div id="findings-list" class="space-y-3">
+          <div class="text-sm text-slate-500 italic">No scan yet — scan a vendor to populate findings.</div>
+        </div>
+      </section>
+
+      <!-- ====== DPDP PANEL ====== -->
+      <section data-panel="dpdp" class="panel space-y-5">
+        <div class="flex items-start justify-between flex-wrap gap-3">
+          <div>
+            <h1 class="text-2xl font-bold tracking-tight">DPDP Act 2023 Exposure</h1>
+            <p class="text-sm text-slate-400">Every finding is mapped to a DPDP clause with verbatim gazette excerpt, obligation, immediate action, and ₹ liability.</p>
+          </div>
+          <div class="text-right">
+            <div class="text-[10px] uppercase tracking-wider text-slate-500">Total exposure</div>
+            <div id="dpdp-total" class="text-3xl font-bold mono text-rose-300 mt-0.5">₹0</div>
+          </div>
+        </div>
+        <div id="dpdp-list" class="space-y-2">
+          <div class="text-sm text-slate-500 italic">No scan yet — scan a vendor to see mapped clauses.</div>
+        </div>
+        <div class="pt-2">
+          <a id="dpdp-pdf" href="#" target="_blank" class="btn-ghost inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm pointer-events-none opacity-40">
+            ⬇ Download DPDP exposure report
+          </a>
+        </div>
+      </section>
+
+      <!-- ====== GATEWAY + ALERTS PANEL ====== -->
+      <section data-panel="gateway" class="panel space-y-5">
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight">Vendor Access Gateway</h1>
+          <p class="text-sm text-slate-400">IsolationForest behavioural ML + deterministic policy rules. Every decision is sub-second, with measured wall-clock containment time.</p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+          <!-- Controls -->
+          <div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 space-y-4">
+            <div class="flex items-center justify-between">
+              <h2 class="text-lg font-semibold">Gateway Controls</h2>
+              <span id="gw-active-chip" class="chip mono">● inactive</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-slate-400">Vendor</span>
+              <span id="gw-vendor-badge" class="chip mono" style="color:#fcd34d; border-color:rgba(245,158,11,0.35); background:rgba(245,158,11,0.08)">—</span>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <label class="text-xs text-slate-400">
+                Scope
+                <input id="gw-scope" type="text" value="reporting"
+                       class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 mono text-sm focus:outline-none focus:border-amber-400"/>
+              </label>
+              <label class="text-xs text-slate-400">
+                Max records / request
+                <input id="gw-max" type="number" value="500"
+                       class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 mono text-sm focus:outline-none focus:border-amber-400"/>
+              </label>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button id="activate-btn" class="btn-safe px-4 py-2 rounded-lg text-sm">Activate Gateway</button>
+              <button id="simulate-btn" class="btn-danger px-4 py-2 rounded-lg text-sm">▶ Simulate Attack</button>
+              <button id="normal-btn" class="btn-ghost px-4 py-2 rounded-lg text-sm">Normal Traffic</button>
+              <button id="reset-btn" class="btn-ghost px-4 py-2 rounded-lg text-sm">↻ Reset</button>
+              <button id="mint-canary-btn" class="btn-indigo px-4 py-2 rounded-lg text-sm">🕳 Mint Canary</button>
+            </div>
+            <div id="gw-status" class="text-xs mono text-slate-400 leading-relaxed min-h-[1.25rem]"></div>
+
+            <!-- Containment timer -->
+            <div id="containment-box" class="hidden mt-1 rounded-xl border border-rose-500/40 bg-rose-500/5 p-4 text-center">
+              <div id="containment-label" class="text-[10px] uppercase tracking-widest text-rose-300 mono">Detecting threat…</div>
+              <div id="containment-timer" class="text-5xl font-bold mono text-rose-300 mt-1 containment-number">0.00s</div>
+              <div id="containment-sub" class="text-[11px] text-rose-200/70 mt-1 mono">live wall-clock · will snap to server value</div>
+            </div>
+          </div>
+
+          <!-- Live alerts -->
+          <div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-5">
+            <div class="flex items-center justify-between">
+              <h2 class="text-lg font-semibold">Live Alerts <span class="text-[11px] text-slate-500 font-normal">· SSE stream</span></h2>
+              <span id="sse-chip" class="chip mono">stream: …</span>
+            </div>
+            <div id="alerts-list" class="mt-3 space-y-3 max-h-[520px] overflow-y-auto scroll-fade pr-1">
+              <div class="text-sm text-slate-500 italic">No alerts yet — activate the gateway and simulate an attack.</div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ====== CANARY PANEL ====== -->
+      <section data-panel="canary" class="panel space-y-5">
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight">Canary Tokens</h1>
+          <p class="text-sm text-slate-400">Tripwire endpoints that no legitimate vendor call should ever hit. Any request = immediate critical alert. Zero false positives.</p>
+        </div>
+        <div class="rounded-xl border border-indigo-500/30 bg-indigo-500/5 p-3 text-xs text-indigo-100">
+          <span class="text-indigo-300 font-semibold">How it works:</span> Mint a canary to stamp a fake endpoint on the vendor's token (e.g. <code class="mono text-indigo-200">reporting/export-legacy</code>). The moment their code hits it, we fire a critical alert on the live SSE stream and quarantine the credential.
+        </div>
+        <div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 space-y-4">
+          <div class="flex items-end gap-2 flex-wrap">
+            <label class="text-xs text-slate-400 flex-1 min-w-[240px]">
+              Endpoint
+              <input id="canary-endpoint" type="text" value="reporting/export-legacy"
+                     class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 mono text-sm focus:outline-none focus:border-amber-400"/>
+            </label>
+            <button id="canary-mint-btn" class="btn-indigo px-4 py-2 rounded-lg text-sm">Mint Canary Token</button>
+            <button id="canary-refresh-btn" class="btn-ghost px-3 py-2 rounded-lg text-xs">↻ Refresh</button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="text-slate-400 text-[11px] uppercase tracking-wider">
+                <tr class="border-b border-slate-800">
+                  <th class="text-left py-2">Token ID</th>
+                  <th class="text-left">Vendor</th>
+                  <th class="text-left">Endpoint</th>
+                  <th class="text-left">Created</th>
+                  <th class="text-left">Status</th>
+                  <th class="text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="canary-rows" class="divide-y divide-slate-800">
+                <tr><td colspan="6" class="py-3 text-slate-500 text-sm italic">No canaries minted yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====== VENDOR GRAPH ====== -->
+      <section data-panel="graph" class="panel space-y-5">
+        <div class="flex items-start justify-between flex-wrap gap-3">
+          <div>
+            <h1 class="text-2xl font-bold tracking-tight">Vendor Exposure Graph</h1>
+            <p class="text-sm text-slate-400">Your company at the centre. Every vendor scanned becomes a node. Edges colour-code the risk band.</p>
+          </div>
+          <button id="graph-refresh" class="btn-ghost px-3 py-1.5 rounded-lg text-xs">↻ Refresh Graph</button>
+        </div>
+        <div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-2">
+          <div id="graph" class="rounded-lg bg-slate-950"></div>
+        </div>
+        <div class="flex items-center justify-between flex-wrap gap-2 text-xs">
+          <div class="flex items-center gap-4 text-slate-400">
+            <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded-full" style="background:#10b981"></span> Safe (≥80)</span>
+            <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded-full" style="background:#f59e0b"></span> Watch (50–79)</span>
+            <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded-full" style="background:#ef4444"></span> Block (&lt;50)</span>
+          </div>
+          <div id="graph-tip" class="text-slate-500 mono"></div>
+        </div>
+      </section>
+
+      <!-- ====== ASK DPDP ====== -->
+      <section data-panel="ask" class="panel space-y-5">
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight">Ask DPDP</h1>
+          <p class="text-sm text-slate-400">RAG over 14 verbatim gazette passages. Every answer cites its section + page. Zero hallucinated clauses.</p>
+        </div>
+        <div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 space-y-4">
+          <div class="flex gap-2">
+            <input id="rag-q" type="text" placeholder="e.g. When must a breach be reported to the Data Protection Board?"
+                   class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-amber-400" />
+            <button id="rag-btn" class="btn-primary px-5 py-2.5 rounded-lg text-sm">Ask</button>
+          </div>
+          <div id="rag-chips" class="flex flex-wrap gap-1.5">
+            <button class="chip clickable" data-q="What is §8(5)?">What is §8(5)?</button>
+            <button class="chip clickable" data-q="Children's data rules">Children's data rules</button>
+            <button class="chip clickable" data-q="Cross-border transfer rules">Cross-border transfer rules</button>
+            <button class="chip clickable" data-q="Breach notification timeline">Breach notification timeline</button>
+            <button class="chip clickable" data-q="What are the penalties under Section 8(5)?">Penalties under §8(5)</button>
+          </div>
+          <div id="rag-answer" class="text-sm text-slate-200 leading-relaxed whitespace-pre-line min-h-[1.5rem]"></div>
+          <div id="rag-cites" class="space-y-2"></div>
+        </div>
+      </section>
+
+      <!-- ====== BOARD REPORT ====== -->
+      <section data-panel="report" class="panel space-y-5">
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight">CISO Board Report</h1>
+          <p class="text-sm text-slate-400">A one-click PDF you can hand to a board meeting. ReportLab-rendered, grounded in the DPDP Act gazette.</p>
+        </div>
+        <div id="report-empty" class="rounded-2xl border border-slate-800 bg-slate-900/50 p-8 text-center text-slate-400">
+          <div class="text-4xl mb-2">📄</div>
+          Run a scan first — then you can download a board-ready PDF for that vendor.
+        </div>
+        <div id="report-card" class="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 space-y-4 hidden">
+          <div class="flex items-start justify-between flex-wrap gap-3">
+            <div>
+              <div class="text-[11px] uppercase tracking-wider text-slate-500">Report for</div>
+              <div id="report-vendor" class="text-xl font-semibold mono text-amber-300">—</div>
+            </div>
+            <a id="report-dl" href="#" target="_blank" class="btn-primary px-5 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
+              ⬇ Download CISO Board Report (PDF)
+            </a>
+          </div>
+          <div class="text-sm text-slate-300">
+            <div class="text-[11px] uppercase tracking-wider text-slate-500 mb-1">What's inside</div>
+            <ul class="list-disc list-inside space-y-1 text-slate-300">
+              <li>Trust Score (0–100) + band + colour-coded recommendation</li>
+              <li>OSINT findings with severity, evidence, and source provenance</li>
+              <li>DPDP clause exposure table with verbatim gazette excerpts and ₹ penalties</li>
+              <li>AI-drafted risk summary (Claude / GPT)</li>
+              <li>Recommended immediate actions per clause</li>
+            </ul>
+          </div>
+          <div class="text-[11px] text-slate-500 mono">Generated by ReportLab · grounded in DPDP Act 2023 gazette (TF-IDF RAG · 14 passages).</div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- =================== SCRIPT =================== -->
+  <script>
+    // =========================================================================
+    // Config
+    // =========================================================================
+    const API = (window.VG_API || 'http://127.0.0.1:8765').replace(/\/+$/, '');
+
+    // =========================================================================
+    // Helpers
+    // =========================================================================
+    const $ = (id) => document.getElementById(id);
+    const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+
+    const fmtINR = (n) => {
+      n = n || 0;
+      if (n >= 1e7) return `₹${(n/1e7).toFixed(n % 1e7 === 0 ? 0 : 1)} Cr`;
+      if (n >= 1e5) return `₹${(n/1e5).toFixed(n % 1e5 === 0 ? 0 : 1)} L`;
+      return `₹${n.toLocaleString('en-IN')}`;
+    };
+
+    const esc = (s) => String(s == null ? '' : s)
+      .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
+      .replaceAll('"','&quot;').replaceAll("'",'&#39;');
+
+    const sevRank = { critical: 4, high: 3, medium: 2, low: 1 };
+
+    const srcChipClass = (src) => {
+      const s = String(src || '').toLowerCase();
+      if (s.includes('shodan')) return 'src-shodan';
+      if (s.includes('hibp')) return 'src-hibp';
+      if (s.includes('virustotal')) return 'src-virustotal';
+      if (s.includes('nuclei')) return 'src-nuclei';
+      if (s.includes('tls')) return 'src-tls';
+      if (s.includes('dns')) return 'src-dns';
+      if (s.includes('crt')) return 'src-crtsh';
+      if (s.includes('dpdp')) return 'src-dpdp';
+      return '';
+    };
+
+    async function api(path, opts = {}) {
+      const r = await fetch(API + path, {
+        headers: {'Content-Type': 'application/json'},
+        ...opts,
+      });
+      if (!r.ok) {
+        let body = '';
+        try { body = await r.text(); } catch {}
+        throw new Error(`${path} → HTTP ${r.status}${body ? ': ' + body.slice(0,120) : ''}`);
+      }
+      return r.json();
+    }
+
+    const sleep = (ms) => new Promise(res => setTimeout(res, ms));
+
+    // =========================================================================
+    // Sidebar nav
+    // =========================================================================
+    const NAV_ITEMS = [
+      { id: 'overview', icon: '🛡️',  label: 'Overview',       sub: 'Trust score + summary' },
+      { id: 'findings', icon: '🔍',  label: 'OSINT Findings', sub: 'Evidence from 7 sources' },
+      { id: 'dpdp',     icon: '⚖️',  label: 'DPDP Exposure',  sub: 'Clause map + ₹ penalties' },
+      { id: 'gateway',  icon: '🚨',  label: 'Gateway & Alerts', sub: 'Live ML + containment' },
+      { id: 'canary',   icon: '🕳️', label: 'Canary Tokens',  sub: 'Tripwire endpoints' },
+      { id: 'graph',    icon: '🗺️',  label: 'Vendor Graph',    sub: 'Relationship map' },
+      { id: 'ask',      icon: '💬',  label: 'Ask DPDP',        sub: 'RAG Q&A' },
+      { id: 'report',   icon: '📄',  label: 'Board Report',   sub: 'CISO-ready PDF' },
+    ];
+
+    function renderSidebar() {
+      $('sidebar-nav').innerHTML = NAV_ITEMS.map(n => `
+        <button data-nav="${n.id}" class="nav-btn w-full text-left flex items-center gap-3 px-4 py-2.5">
+          <span class="text-lg leading-none">${n.icon}</span>
+          <span class="flex-1 min-w-0">
+            <span class="block text-sm font-medium">${esc(n.label)}<span id="badge-${n.id}" class="ml-2 mono text-[10px] text-slate-500 align-middle"></span></span>
+            <span class="block text-[10px] text-slate-500 truncate">${esc(n.sub)}</span>
+          </span>
+        </button>
+      `).join('');
+      $$('#sidebar-nav button').forEach(b => b.addEventListener('click', () => navTo(b.dataset.nav)));
+    }
+
+    function navTo(id) {
+      $$('#sidebar-nav button').forEach(b => b.classList.toggle('active', b.dataset.nav === id));
+      $$('main > section[data-panel]').forEach(s => s.classList.toggle('active', s.dataset.panel === id));
+      // auto-refresh graph when opening graph panel
+      if (id === 'graph') refreshGraph();
+      if (id === 'canary') loadCanaries().catch(() => {});
+    }
+
+    // =========================================================================
+    // API status ping
+    // =========================================================================
+    async function pingStatus() {
+      try {
+        const r = await api('/');
+        $('api-status').textContent = `api: online · demo=${r.demo_mode ? 'on' : 'off'}`;
+        $('api-status').className = 'chip mono';
+        $('api-status').style.color = '#6ee7b7';
+        $('api-status').style.borderColor = 'rgba(16,185,129,0.4)';
+        $('api-status').style.background = 'rgba(16,185,129,0.08)';
+
+        if (r.engines && r.engines.behavioural_ml) {
+          $('ml-chip').textContent = `ml: ${r.engines.behavioural_ml.model} · ${r.engines.behavioural_ml.baseline_samples} baselines`;
+          $('ml-chip').classList.remove('hidden');
+        }
+        if (r.integrations) {
+          const live = !!r.integrations.nuclei;
+          $('nuclei-chip').textContent = `nuclei: ${live ? 'live' : 'mock'}`;
+          $('nuclei-chip').classList.remove('hidden');
+        }
+        if (r.engines && r.engines.dpdp_rag) {
+          $('rag-chip').textContent = `rag: ${r.engines.dpdp_rag.passages} passages`;
+          $('rag-chip').classList.remove('hidden');
+        }
+      } catch {
+        const s = $('api-status');
+        s.textContent = 'api: offline';
+        s.style.color = '#fda4af';
+        s.style.borderColor = 'rgba(244,63,94,0.4)';
+        s.style.background = 'rgba(244,63,94,0.08)';
+      }
+    }
+
+    // =========================================================================
+    // Scan + Overview rendering
+    // =========================================================================
+    let lastScan = null;
+    const recentVendors = []; // last 3
+
+    function pushVendorHistory(v) {
+      const i = recentVendors.indexOf(v);
+      if (i !== -1) recentVendors.splice(i, 1);
+      recentVendors.unshift(v);
+      while (recentVendors.length > 3) recentVendors.pop();
+      renderVendorHistory();
+    }
+
+    function renderVendorHistory() {
+      const el = $('vendor-history');
+      if (!recentVendors.length) {
+        el.innerHTML = '<span class="text-xs text-slate-600 italic">no scans yet</span>';
+        return;
+      }
+      el.innerHTML = recentVendors.map(v => `
+        <button class="chip clickable mono" data-vh="${esc(v)}">${esc(v)}</button>
+      `).join('');
+      $$('#vendor-history button').forEach(b => b.addEventListener('click', () => {
+        $('vendor-input').value = b.dataset.vh;
+        doScan();
+      }));
+    }
+
+    function colourForScore(score) {
+      if (score >= 80) return '#10b981'; // emerald
+      if (score >= 50) return '#f59e0b'; // amber
+      return '#ef4444'; // rose
+    }
+    function bandLabel(score) {
+      if (score >= 80) return 'safe';
+      if (score >= 50) return 'watch';
+      return 'block';
+    }
+
+    function animateScoreRing(targetScore, finalColour) {
+      const arc = $('score-arc');
+      const num = $('score-num');
+      const circ = 339.29;
+      // Reset to empty before animating
+      arc.setAttribute('stroke-dashoffset', circ);
+      arc.setAttribute('stroke', '#64748b');
+      num.textContent = '0';
+      num.style.color = '#cbd5e1';
+      // Force reflow so the transition re-runs
+      void arc.getBoundingClientRect();
+
+      arc.setAttribute('stroke', finalColour);
+      arc.setAttribute('stroke-dashoffset', circ - circ * (targetScore / 100));
+
+      // Count up the number in sync with the ring (1.2s)
+      const start = performance.now();
+      const dur = 1200;
+      function tick(t) {
+        const p = Math.min(1, (t - start) / dur);
+        const eased = 1 - Math.pow(1 - p, 3);
+        num.textContent = Math.round(targetScore * eased);
+        if (p < 1) requestAnimationFrame(tick);
+        else {
+          num.textContent = targetScore;
+          num.style.color = finalColour;
+        }
+      }
+      requestAnimationFrame(tick);
+    }
+
+    function renderOverview(r) {
+      const colour = r.trust.color || colourForScore(r.trust.score);
+      animateScoreRing(r.trust.score, colour);
+
+      const bandEl = $('score-band');
+      bandEl.textContent = r.trust.label || bandLabel(r.trust.score);
+      bandEl.style.color = colour;
+      bandEl.style.borderColor = colour + '66';
+      bandEl.style.backgroundColor = colour + '15';
+
+      $('stat-findings').textContent = r.findings.length;
+      $('stat-sources').textContent = new Set(r.findings.map(f => f.source)).size;
+      $('stat-ms').textContent = r.duration_ms;
+
+      $('ai-summary').textContent = r.ai_summary || '(no summary produced)';
+      $('exposure-total').textContent = fmtINR(r.total_dpdp_exposure_inr);
+      $('exposure-total').style.color = colour;
+
+      $('scan-meta').textContent =
+        `${r.vendor} · ${r.findings.length} findings · ${new Set(r.findings.map(f=>f.source)).size} sources · ${r.duration_ms}ms · ${r.scanned_at}`;
+
+      // Badge in sidebar
+      $('badge-findings').textContent = r.findings.length ? `${r.findings.length}` : '';
+      $('badge-dpdp').textContent = r.dpdp.length ? `${r.dpdp.length}` : '';
+
+      // Gateway vendor badge
+      $('gw-vendor-badge').textContent = r.vendor;
+
+      // Report panel
+      $('report-empty').classList.add('hidden');
+      $('report-card').classList.remove('hidden');
+      $('report-vendor').textContent = r.vendor;
+      $('report-dl').href = `${API}/report/${encodeURIComponent(r.vendor)}.pdf`;
+
+      // DPDP pdf link
+      const pdfBtn = $('dpdp-pdf');
+      pdfBtn.href = `${API}/report/${encodeURIComponent(r.vendor)}.pdf`;
+      pdfBtn.classList.remove('pointer-events-none', 'opacity-40');
+    }
+
+    // --- findings ---
+    let findingsFilter = 'all';
+
+    function renderFindings(findings) {
+      const list = $('findings-list');
+      if (!findings.length) {
+        list.innerHTML = '<div class="text-sm text-slate-500 italic">No findings.</div>';
+        return;
+      }
+      const filtered = findings
+        .filter(f => findingsFilter === 'all' ? true : f.severity === findingsFilter)
+        .sort((a,b) => (sevRank[b.severity]||0) - (sevRank[a.severity]||0));
+
+      if (!filtered.length) {
+        list.innerHTML = `<div class="text-sm text-slate-500 italic">No <span class="mono">${findingsFilter}</span> findings.</div>`;
+        return;
+      }
+
+      list.innerHTML = filtered.map(f => `
+        <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+          <div class="flex items-start justify-between gap-3 flex-wrap">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="badge-sev sev-${f.severity}">${f.severity}</span>
+              <span class="src-chip mono ${srcChipClass(f.source)}">${esc(f.source)}</span>
+              <span class="text-[10px] text-slate-500 mono">id: ${esc(f.id)}</span>
+            </div>
+          </div>
+          <div class="mt-2 text-sm font-semibold text-slate-100">${esc(f.title)}</div>
+          <div class="text-xs text-slate-400 mt-1">${esc(f.description)}</div>
+          <details class="mt-2">
+            <summary class="text-[11px] text-amber-300 mono"><span class="chev">▶</span> evidence</summary>
+            <pre class="mt-2 p-2 rounded bg-slate-950/80 border border-slate-800 text-[11px] text-slate-300 overflow-x-auto mono">${esc(JSON.stringify(f.evidence || {}, null, 2))}</pre>
+          </details>
+        </div>
+      `).join('');
+    }
+
+    $('findings-filter').addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-f]');
+      if (!btn) return;
+      findingsFilter = btn.dataset.f;
+      $$('#findings-filter button').forEach(b => b.classList.toggle('active', b === btn));
+      if (lastScan) renderFindings(lastScan.findings);
+    });
+
+    // --- dpdp ---
+    function renderDpdp(mappings, total) {
+      $('dpdp-total').textContent = fmtINR(total);
+      const list = $('dpdp-list');
+      if (!mappings.length) {
+        list.innerHTML = '<div class="text-sm text-slate-500 italic">No DPDP exposure detected on this vendor.</div>';
+        return;
+      }
+      // Group by clause
+      const byClause = {};
+      for (const m of mappings) {
+        if (!byClause[m.clause]) byClause[m.clause] = { ...m, count: 0 };
+        byClause[m.clause].count += 1;
+      }
+      const rows = Object.values(byClause);
+      list.innerHTML = rows.map(m => `
+        <details class="rounded-xl border border-slate-800 bg-slate-900/50 overflow-hidden" data-clause="${esc(m.clause)}">
+          <summary class="flex items-center justify-between gap-3 p-4 hover:bg-slate-800/30">
+            <div class="flex items-center gap-3 min-w-0">
+              <span class="mono text-amber-300 font-bold text-sm whitespace-nowrap"><span class="chev">▶</span> ${esc(m.clause)}</span>
+              <span class="text-sm text-slate-200 truncate">${esc(m.obligation)}</span>
+              <span class="chip mono">${m.count} finding${m.count===1?'':'s'}</span>
+            </div>
+            <div class="mono text-rose-300 text-sm whitespace-nowrap">${fmtINR(m.max_penalty_inr)}</div>
+          </summary>
+          <div class="px-4 pb-4 pt-1 border-t border-slate-800 text-xs text-slate-300 space-y-3">
+            ${m.rag_quote ? `
+              <div class="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+                <div class="text-[10px] uppercase tracking-wider text-amber-400 mono mb-1">${esc(m.rag_citation || 'DPDP Act 2023')}</div>
+                <div class="leading-relaxed">&ldquo;${esc(m.rag_quote)}&rdquo;</div>
+              </div>` : ''}
+            <div><span class="text-[10px] uppercase tracking-wider text-slate-500">Immediate action</span><div class="mt-1">${esc(m.immediate_action || '—')}</div></div>
+            <div><span class="text-[10px] uppercase tracking-wider text-slate-500">Liability note</span><div class="mt-1">${esc(m.liability_note || '—')}</div></div>
+            <div class="pt-2">
+              <button class="btn-ghost px-3 py-1.5 rounded text-[11px]" data-copy-clause="${esc(m.clause)}">📋 Copy clause summary</button>
+            </div>
+          </div>
+        </details>
+      `).join('');
+
+      $$('#dpdp-list button[data-copy-clause]').forEach(b => {
+        b.addEventListener('click', async (e) => {
+          e.preventDefault(); e.stopPropagation();
+          const clause = b.dataset.copyClause;
+          const m = rows.find(x => x.clause === clause);
+          if (!m) return;
+          const text =
+`${m.clause} · ${m.obligation}
+Max penalty: ${fmtINR(m.max_penalty_inr)}
+Immediate action: ${m.immediate_action}
+Liability: ${m.liability_note}
+Quote: "${m.rag_quote || ''}"
+Cite: ${m.rag_citation || ''}`;
+          try { await navigator.clipboard.writeText(text); b.textContent = '✓ copied'; setTimeout(() => b.innerHTML = '📋 Copy clause summary', 1500); }
+          catch { b.textContent = 'copy failed'; }
+        });
+      });
+    }
+
+    // =========================================================================
+    // Scan
+    // =========================================================================
+    async function doScan() {
+      const vendor = $('vendor-input').value.trim().toLowerCase();
+      if (!vendor) return;
+      $('scan-btn').disabled = true;
+      $('scan-btn').textContent = 'Scanning…';
+      $('scan-meta').textContent = `scanning ${vendor} …`;
+      try {
+        const r = await api('/scan', { method: 'POST', body: JSON.stringify({ vendor }) });
+        lastScan = r;
+        renderOverview(r);
+        renderFindings(r.findings);
+        renderDpdp(r.dpdp, r.total_dpdp_exposure_inr);
+        pushVendorHistory(vendor);
+        // refresh graph silently
+        refreshGraph().catch(() => {});
+      } catch (e) {
+        $('scan-meta').textContent = `scan failed: ${e.message}`;
+      } finally {
+        $('scan-btn').disabled = false;
+        $('scan-btn').textContent = 'Scan Vendor';
+      }
+    }
+
+    // =========================================================================
+    // Gateway
+    // =========================================================================
+    let gwTimerHandle = null;
+
+    function setGatewayActiveChip(active) {
+      const c = $('gw-active-chip');
+      if (active) {
+        c.textContent = '● active';
+        c.style.color = '#6ee7b7';
+        c.style.borderColor = 'rgba(16,185,129,0.4)';
+        c.style.background = 'rgba(16,185,129,0.08)';
+      } else {
+        c.textContent = '● inactive';
+        c.style.color = '#94a3b8';
+        c.style.borderColor = 'rgba(148,163,184,0.2)';
+        c.style.background = 'rgba(148,163,184,0.05)';
+      }
+    }
+
+    async function activateGateway() {
+      const vendor = $('vendor-input').value.trim().toLowerCase();
+      $('gw-vendor-badge').textContent = vendor;
+      const scope = $('gw-scope').value.split(',').map(s => s.trim()).filter(Boolean);
+      const max = parseInt($('gw-max').value, 10) || 500;
+      $('activate-btn').disabled = true;
+      try {
+        const s = await api('/gateway/activate', { method: 'POST', body: JSON.stringify({
+          vendor, scope, max_records_per_request: max,
+        })});
+        $('gw-status').innerHTML =
+          `<span class="text-emerald-300">● active</span> token=<span class="text-amber-300">${esc(s.token_id)}</span> scope=[${esc(s.scope.join(','))}] limit=${s.max_records_per_request}`;
+        setGatewayActiveChip(true);
+      } catch (e) {
+        $('gw-status').innerHTML = `<span class="text-rose-300">activation failed:</span> ${esc(e.message)}`;
+      } finally {
+        $('activate-btn').disabled = false;
+      }
+    }
+
+    async function resetGateway() {
+      const vendor = $('vendor-input').value.trim().toLowerCase();
+      try {
+        const s = await api(`/gateway/reset/${encodeURIComponent(vendor)}`, { method: 'POST' });
+        $('gw-status').innerHTML =
+          `<span class="text-amber-300">● reset</span> token=${esc(s.token_id || '')} scope=[${esc(s.scope.join(','))}] limit=${s.max_records_per_request}`;
+        setGatewayActiveChip(!!s.active);
+        $('containment-box').classList.add('hidden');
+        // Clear alerts list
+        $('alerts-list').innerHTML = '<div class="text-sm text-slate-500 italic">No alerts yet — activate the gateway and simulate an attack.</div>';
+      } catch (e) {
+        $('gw-status').innerHTML = `<span class="text-rose-300">reset failed:</span> ${esc(e.message)}`;
+      }
+    }
+
+    function startContainmentTimer() {
+      const box = $('containment-box');
+      const timer = $('containment-timer');
+      const label = $('containment-label');
+      const sub = $('containment-sub');
+      box.classList.remove('hidden');
+      box.classList.remove('alert-pulse');
+      label.textContent = 'Detecting threat…';
+      label.className = 'text-[10px] uppercase tracking-widest text-rose-300 mono';
+      timer.textContent = '0.00s';
+      timer.classList.add('containment-number');
+      sub.textContent = 'live wall-clock · will snap to server value';
+      const t0 = performance.now();
+      if (gwTimerHandle) clearInterval(gwTimerHandle);
+      gwTimerHandle = setInterval(() => {
+        const s = (performance.now() - t0) / 1000;
+        timer.textContent = s.toFixed(2) + 's';
+      }, 10);
+    }
+
+    function stopContainmentTimer(serverSeconds, blocked) {
+      if (gwTimerHandle) { clearInterval(gwTimerHandle); gwTimerHandle = null; }
+      const box = $('containment-box');
+      const timer = $('containment-timer');
+      const label = $('containment-label');
+      const sub = $('containment-sub');
+      if (blocked) {
+        label.textContent = '🛑 CONTAINED';
+        label.className = 'text-[11px] uppercase tracking-widest text-rose-300 mono font-bold';
+        timer.textContent = (serverSeconds ?? 0).toFixed(2) + 's';
+        timer.classList.add('containment-number');
+        sub.textContent = 'measured wall-clock — request entry → gateway decision';
+        box.classList.add('alert-pulse');
+        setTimeout(() => box.classList.remove('alert-pulse'), 6000);
+      } else {
+        label.textContent = '✓ ALLOWED';
+        label.className = 'text-[11px] uppercase tracking-widest text-emerald-300 mono font-bold';
+        timer.classList.remove('containment-number');
+        timer.style.color = '#10b981';
+        timer.textContent = (serverSeconds ?? 0).toFixed(3) + 's';
+        sub.textContent = 'within baseline + policy limit — no action taken';
+        setTimeout(() => { timer.style.color = ''; timer.classList.add('containment-number'); }, 3500);
+      }
+    }
+
+    async function simulateAttack() {
+      const vendor = $('vendor-input').value.trim().toLowerCase();
+      startContainmentTimer();
+      $('simulate-btn').disabled = true;
+      try {
+        const r = await api('/gateway/proxy', { method: 'POST', body: JSON.stringify({
+          vendor, endpoint: 'reporting/export', records_requested: 12000, client_ip: '203.0.113.42',
+        })});
+        const sec = r.event ? r.event.containment_seconds : (r.alert && r.alert.containment_seconds) || 0;
+        stopContainmentTimer(sec, r.decision === 'block');
+        if (r.event) appendAlert(r.event);
+      } catch (e) {
+        stopContainmentTimer(0, false);
+        $('gw-status').innerHTML = `<span class="text-rose-300">simulate failed:</span> ${esc(e.message)}`;
+      } finally {
+        $('simulate-btn').disabled = false;
+      }
+    }
+
+    async function normalTraffic() {
+      const vendor = $('vendor-input').value.trim().toLowerCase();
+      startContainmentTimer();
+      $('normal-btn').disabled = true;
+      try {
+        const r = await api('/gateway/proxy', { method: 'POST', body: JSON.stringify({
+          vendor, endpoint: 'reporting/daily', records_requested: 25, client_ip: '203.0.113.42',
+        })});
+        const sec = r.event ? r.event.containment_seconds : 0.05;
+        stopContainmentTimer(sec, r.decision === 'block');
+        if (r.event) appendAlert(r.event);
+        else {
+          // Append a subtle allow chip to status
+          $('gw-status').innerHTML += ` <span class="text-emerald-300">· allow 25 records</span>`;
+        }
+      } catch (e) {
+        stopContainmentTimer(0, false);
+        $('gw-status').innerHTML = `<span class="text-rose-300">normal-traffic failed:</span> ${esc(e.message)}`;
+      } finally {
+        $('normal-btn').disabled = false;
+      }
+    }
+
+    function appendAlert(ev) {
+      const list = $('alerts-list');
+      const first = list.firstElementChild;
+      if (first && first.classList.contains('italic')) list.innerHTML = '';
+      const sevCls = `sev-${ev.severity || 'low'}`;
+      const div = document.createElement('div');
+      const anomaly = (ev.anomaly_score != null)
+        ? `<span>anomaly <span class="text-indigo-300 font-bold">${ev.anomaly_score}</span></span>` : '';
+      div.className = `rounded-xl border p-3 bg-slate-900/50 alert-pulse`;
+      div.style.borderColor = 'rgba(244,63,94,0.4)';
+      div.innerHTML = `
+        <div class="flex items-center justify-between gap-3 flex-wrap">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="badge-sev ${sevCls}">${esc(ev.severity || 'low')}</span>
+            <span class="text-[10px] text-slate-500 mono">${esc(ev.at || '')}</span>
+          </div>
+          <span class="text-[10px] text-slate-500 mono">vendor: ${esc(ev.vendor || '')}</span>
+        </div>
+        <div class="mt-1.5 text-sm font-semibold">${esc(ev.title || '')}</div>
+        <div class="text-xs text-slate-400 mt-1">${esc(ev.summary || '')}</div>
+        <div class="text-xs text-slate-300 mt-2 whitespace-pre-line">${esc(ev.action_taken || '')}</div>
+        <div class="mt-2 flex items-center flex-wrap gap-x-4 gap-y-1 text-[11px] mono text-slate-400">
+          <span>DPDP: <span class="text-rose-300">${fmtINR(ev.dpdp_exposure_inr || 0)}</span></span>
+          ${anomaly}
+          <span>contained <span class="text-emerald-300 font-bold">${(ev.containment_seconds ?? 0).toFixed(2)}s</span></span>
+        </div>`;
+      list.prepend(div);
+      setTimeout(() => div.classList.remove('alert-pulse'), 6000);
+    }
+
+    // =========================================================================
+    // SSE live stream
+    // =========================================================================
+    function startSSE() {
+      const chip = $('sse-chip');
+      try {
+        const es = new EventSource(`${API}/alerts/stream`);
+        es.onopen = () => {
+          chip.textContent = 'stream: live';
+          chip.style.color = '#6ee7b7';
+          chip.style.borderColor = 'rgba(16,185,129,0.4)';
+          chip.style.background = 'rgba(16,185,129,0.08)';
+        };
+        es.onerror = () => {
+          chip.textContent = 'stream: retrying…';
+          chip.style.color = '#fcd34d';
+          chip.style.borderColor = 'rgba(245,158,11,0.4)';
+          chip.style.background = 'rgba(245,158,11,0.08)';
+        };
+        es.onmessage = (msg) => {
+          try {
+            const obj = JSON.parse(msg.data);
+            if (obj && obj.severity && obj.title) appendAlert(obj);
+          } catch {}
+        };
+      } catch {
+        chip.textContent = 'stream: unavailable';
+      }
+    }
+
+    // =========================================================================
+    // Canary
+    // =========================================================================
+    async function mintCanary() {
+      const vendor = $('vendor-input').value.trim().toLowerCase();
+      const endpoint = $('canary-endpoint').value.trim() || 'reporting/export-legacy';
+      try {
+        await api('/canary/mint', { method: 'POST', body: JSON.stringify({ vendor, endpoint }) });
+        await loadCanaries();
+        navTo('canary');
+      } catch (e) {
+        alert('Canary mint failed: ' + e.message);
+      }
+    }
+
+    async function loadCanaries() {
+      const vendor = $('vendor-input').value.trim().toLowerCase();
+      const body = $('canary-rows');
+      try {
+        const tokens = await api(`/canary?vendor=${encodeURIComponent(vendor)}`);
+        if (!tokens.length) {
+          body.innerHTML = `<tr><td colspan="6" class="py-3 text-slate-500 text-sm italic">No canaries minted for ${esc(vendor)} yet.</td></tr>`;
+          return;
+        }
+        body.innerHTML = tokens.map(t => `
+          <tr class="${t.triggered ? 'bg-rose-500/10' : ''}">
+            <td class="py-2 pr-3 mono text-amber-300 text-xs">${esc(t.id)}</td>
+            <td class="py-2 pr-3 text-xs">${esc(t.vendor)}</td>
+            <td class="py-2 pr-3 mono text-xs">${esc(t.endpoint)}</td>
+            <td class="py-2 pr-3 mono text-[11px] text-slate-400">${esc(t.created_at || '')}</td>
+            <td class="py-2 pr-3">
+              ${t.triggered
+                ? `<span class="badge-sev sev-critical">TRIGGERED</span> <span class="text-[11px] text-slate-400 mono ml-1">${esc(t.triggered_from || '')}</span>`
+                : `<span class="badge-sev sev-low">active</span>`}
+            </td>
+            <td class="py-2 text-right">
+              ${t.triggered
+                ? `<span class="text-[11px] text-slate-500 mono">${esc(t.triggered_at || '')}</span>`
+                : `<button class="btn-danger px-3 py-1 rounded text-[11px]" data-trip="${esc(t.id)}">Trip now</button>`}
+            </td>
+          </tr>
+        `).join('');
+        $$('#canary-rows button[data-trip]').forEach(b => b.addEventListener('click', async () => {
+          b.disabled = true; b.textContent = 'Tripping…';
+          try {
+            await api(`/canary/trip/${encodeURIComponent(b.dataset.trip)}`, {
+              method: 'POST',
+              body: JSON.stringify({ from_ip: '198.51.100.7' }),
+            });
+            await loadCanaries();
+          } catch (e) {
+            b.disabled = false; b.textContent = 'Trip now';
+            alert('Trip failed: ' + e.message);
+          }
+        }));
+      } catch (e) {
+        body.innerHTML = `<tr><td colspan="6" class="py-3 text-rose-300 text-sm">Canary fetch failed: ${esc(e.message)}</td></tr>`;
+      }
+    }
+
+    // =========================================================================
+    // Vendor graph
+    // =========================================================================
+    let cy = null;
+
+    async function refreshGraph() {
+      let g = { nodes: [], edges: [] };
+      try { g = await api('/graph'); } catch { return; }
+      const elements = [
+        ...g.nodes.map(n => ({
+          data: {
+            id: n.id,
+            label: n.kind === 'company' ? n.label : `${n.label}${n.score != null ? '\n' + n.score : ''}`,
+            kind: n.kind,
+            band: n.band || 'watch',
+            score: n.score,
+          },
+        })),
+        ...g.edges.map(e => ({
+          data: { id: `${e.source}->${e.target}`, source: e.source, target: e.target, severity: e.severity, exposure: e.exposure_inr },
+        })),
+      ];
+      if (!cy) {
+        cy = cytoscape({
+          container: $('graph'),
+          elements,
+          layout: { name: 'concentric', concentric: (n) => n.data('kind') === 'company' ? 10 : 1, levelWidth: () => 1, spacingFactor: 1.2 },
+          style: [
+            { selector: 'node', style: {
+              'label': 'data(label)',
+              'text-wrap': 'wrap',
+              'text-valign': 'center',
+              'text-halign': 'center',
+              'color': '#f1f5f9',
+              'font-size': 11,
+              'font-family': 'Space Mono, monospace',
+              'width': 70, 'height': 70,
+              'background-color': '#1e293b',
+              'border-width': 2,
+              'border-color': '#334155',
+            }},
+            { selector: 'node[kind = "company"]', style: {
+              'background-color': '#f59e0b', 'color': '#0f172a',
+              'width': 90, 'height': 90, 'border-color': '#fbbf24', 'font-weight': 700,
+            }},
+            { selector: 'node[band = "safe"]',  style: { 'border-color': '#10b981' }},
+            { selector: 'node[band = "watch"]', style: { 'border-color': '#f59e0b' }},
+            { selector: 'node[band = "block"]', style: { 'border-color': '#ef4444' }},
+            { selector: 'edge', style: {
+              'width': 2.5, 'line-color': '#475569',
+              'curve-style': 'bezier', 'target-arrow-shape': 'triangle', 'target-arrow-color': '#475569',
+            }},
+            { selector: 'edge[severity = "critical"]', style: { 'line-color': '#ef4444', 'target-arrow-color': '#ef4444', 'width': 3.5 }},
+            { selector: 'edge[severity = "high"]',     style: { 'line-color': '#f59e0b', 'target-arrow-color': '#f59e0b', 'width': 3 }},
+            { selector: 'edge[severity = "medium"]',   style: { 'line-color': '#eab308', 'target-arrow-color': '#eab308' }},
+            { selector: 'edge[severity = "low"]',      style: { 'line-color': '#10b981', 'target-arrow-color': '#10b981' }},
+          ],
+        });
+        cy.on('tap', 'node', (evt) => {
+          const n = evt.target.data();
+          const exp = (cy.edges(`[target = "${n.id}"]`).data() || {}).exposure || 0;
+          $('graph-tip').textContent = n.kind === 'company'
+            ? 'your company (centre)'
+            : `${n.label.split('\n')[0]} · score ${n.score ?? '?'} · band ${n.band} · exposure ${fmtINR(exp)}`;
+        });
+      } else {
+        cy.elements().remove();
+        cy.add(elements);
+        cy.layout({ name: 'concentric', concentric: (n) => n.data('kind') === 'company' ? 10 : 1, levelWidth: () => 1, spacingFactor: 1.2 }).run();
+      }
+    }
+
+    // =========================================================================
+    // Ask DPDP
+    // =========================================================================
+    async function askDpdp(q) {
+      const query = (q != null ? q : $('rag-q').value).trim();
+      if (!query) return;
+      $('rag-q').value = query;
+      $('rag-answer').textContent = 'thinking…';
+      $('rag-cites').innerHTML = '';
+      try {
+        const r = await api('/rag/ask', { method: 'POST', body: JSON.stringify({ query }) });
+        $('rag-answer').textContent = r.answer || '(no answer)';
+        const cites = r.citations || [];
+        $('rag-cites').innerHTML = cites.map((c, i) => `
+          <div class="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <div class="text-[10px] uppercase tracking-wider text-amber-400 mono">${esc(c.section || '—')} · page ${esc(c.page || '?')}</div>
+              <button class="btn-ghost px-2 py-0.5 rounded text-[10px]" data-cite="${i}">📋 Copy</button>
+            </div>
+            <div class="text-slate-200 mt-1.5 leading-relaxed">&ldquo;${esc(c.excerpt || '')}&rdquo;</div>
+          </div>
+        `).join('');
+        $$('#rag-cites button[data-cite]').forEach(b => b.addEventListener('click', async () => {
+          const c = cites[Number(b.dataset.cite)];
+          try { await navigator.clipboard.writeText(`${c.section} (p.${c.page}): "${c.excerpt}"`); b.textContent = '✓ copied'; setTimeout(() => b.innerHTML = '📋 Copy', 1500); }
+          catch { b.textContent = 'copy failed'; }
+        }));
+      } catch (e) {
+        $('rag-answer').textContent = `ask failed: ${e.message}`;
+      }
+    }
+
+    // =========================================================================
+    // Demo mode (Upgrade 4)
+    // =========================================================================
+    let demoRunning = false;
+
+    async function runDemo() {
+      if (demoRunning) return;
+      demoRunning = true;
+      const badge = $('demo-badge');
+      badge.classList.remove('hidden');
+      try {
+        // 1. Overview + scan paytrust
+        $('vendor-input').value = 'paytrust-partner.com';
+        navTo('overview');
+        await sleep(250);
+        await doScan();                         // uses real /scan
+        await sleep(2000);
+
+        // 2. DPDP panel — highlight §8(5)
+        navTo('dpdp');
+        await sleep(800);
+        const row = $$('#dpdp-list details').find(d => (d.dataset.clause || '').includes('8(5)'));
+        if (row) {
+          row.open = true;
+          row.classList.add('row-pulse');
+          setTimeout(() => row.classList.remove('row-pulse'), 2200);
+        }
+        await sleep(3000);
+
+        // 3. Gateway panel — activate + simulate
+        navTo('gateway');
+        await sleep(700);
+        await activateGateway();
+        await sleep(1000);
+        await simulateAttack();
+        await sleep(5000);
+
+        // 4. Ask DPDP
+        navTo('ask');
+        await sleep(600);
+        await askDpdp('What are the penalties under Section 8(5)?');
+        await sleep(3500);
+
+        // 5. Done — show graph
+        navTo('graph');
+        await sleep(1500);
+        $('gw-status').innerHTML += ` <span class="text-amber-300">· demo complete · try it yourself</span>`;
+      } finally {
+        badge.classList.add('hidden');
+        demoRunning = false;
+      }
+    }
+
+    // =========================================================================
+    // Wire everything up
+    // =========================================================================
+    function wireEvents() {
+      $('scan-btn').addEventListener('click', doScan);
+      $('vendor-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') doScan(); });
+
+      $('jump-findings').addEventListener('click', () => navTo('findings'));
+      $('jump-dpdp').addEventListener('click', () => navTo('dpdp'));
+
+      $('activate-btn').addEventListener('click', activateGateway);
+      $('simulate-btn').addEventListener('click', simulateAttack);
+      $('normal-btn').addEventListener('click', normalTraffic);
+      $('reset-btn').addEventListener('click', resetGateway);
+      $('mint-canary-btn').addEventListener('click', mintCanary);
+
+      $('canary-mint-btn').addEventListener('click', mintCanary);
+      $('canary-refresh-btn').addEventListener('click', () => loadCanaries());
+
+      $('graph-refresh').addEventListener('click', refreshGraph);
+
+      $('rag-btn').addEventListener('click', () => askDpdp());
+      $('rag-q').addEventListener('keydown', (e) => { if (e.key === 'Enter') askDpdp(); });
+      $$('#rag-chips button').forEach(b => b.addEventListener('click', () => askDpdp(b.dataset.q)));
+
+      $('demo-btn').addEventListener('click', runDemo);
+      window.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
+          e.preventDefault();
+          runDemo();
+        }
+      });
+    }
+
+    // =========================================================================
+    // Init
+    // =========================================================================
+    (async function init() {
+      renderSidebar();
+      navTo('overview');
+      wireEvents();
+      await pingStatus();
+      startSSE();
+      refreshGraph().catch(() => {});
+    })();
+  </script>
+</body>
+</html>

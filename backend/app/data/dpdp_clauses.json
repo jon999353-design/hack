@@ -1,0 +1,161 @@
+{
+  "source": "Digital Personal Data Protection Act, 2023 — Gazette of India, 11 Aug 2023",
+  "version": "2023.08.11",
+  "clauses": [
+    {
+      "id": "dpdp-4",
+      "section": "§4",
+      "title": "Grounds for processing",
+      "obligation": "Process personal data only for a lawful purpose with consent or for legitimate uses.",
+      "max_penalty_inr": 500000000,
+      "immediate_action": "Document lawful basis for each processing activity; maintain RoPA.",
+      "liability_note": "Processing without a valid ground is an independent contravention."
+    },
+    {
+      "id": "dpdp-5",
+      "section": "§5",
+      "title": "Notice to Data Principal",
+      "obligation": "Provide plain-language notice at or before request for consent.",
+      "max_penalty_inr": 500000000,
+      "immediate_action": "Publish vendor-specific privacy notice in English + 22 scheduled languages.",
+      "liability_note": "Opaque notices have been a leading cause of DPB observations."
+    },
+    {
+      "id": "dpdp-6",
+      "section": "§6",
+      "title": "Consent",
+      "obligation": "Valid, informed, free and unambiguous consent before processing personal data.",
+      "max_penalty_inr": 2000000000,
+      "immediate_action": "Pause data collection; publish consent notice; collect fresh consents within 30 days.",
+      "liability_note": "Data fiduciary (you) is liable, not the vendor, under §6 read with §8."
+    },
+    {
+      "id": "dpdp-7",
+      "section": "§7",
+      "title": "Legitimate uses",
+      "obligation": "Only the enumerated legitimate-use cases may bypass consent (employment, emergency, etc.).",
+      "max_penalty_inr": 500000000,
+      "immediate_action": "Map each vendor share to a specific sub-clause of §7 or discontinue.",
+      "liability_note": "Misuse of the legitimate-use exemption is heavily scrutinised by DPB."
+    },
+    {
+      "id": "dpdp-8-4",
+      "section": "§8(4)",
+      "title": "Purpose limitation via contract",
+      "obligation": "Engage data processors only under a valid contract that limits processing to stated purposes.",
+      "max_penalty_inr": 1500000000,
+      "immediate_action": "Audit vendor DPA; add purpose-limitation and sub-processor clauses.",
+      "liability_note": "No contract = direct §8(4) violation even if no breach occurred."
+    },
+    {
+      "id": "dpdp-8-5",
+      "section": "§8(5)",
+      "title": "Reasonable security safeguards",
+      "obligation": "Implement reasonable security safeguards to prevent personal data breach.",
+      "max_penalty_inr": 2500000000,
+      "immediate_action": "Isolate vendor access; rotate credentials; preserve logs for DPB.",
+      "liability_note": "Failure of vendor safeguard = failure of data fiduciary under §8(5)."
+    },
+    {
+      "id": "dpdp-8-6",
+      "section": "§8(6)",
+      "title": "Breach notification",
+      "obligation": "Notify the Data Protection Board and affected data principals of a personal data breach.",
+      "max_penalty_inr": 2000000000,
+      "immediate_action": "File intimation with DPB within 72 hours; notify affected users.",
+      "liability_note": "Delay in notification is itself a separate penalisable offence."
+    },
+    {
+      "id": "dpdp-8-7",
+      "section": "§8(7)",
+      "title": "Data minimisation and erasure",
+      "obligation": "Erase personal data upon withdrawal of consent or when purpose is served.",
+      "max_penalty_inr": 500000000,
+      "immediate_action": "Audit retention; purge stale records; update retention SLA with vendor.",
+      "liability_note": "Retention beyond stated purpose is an independent breach."
+    },
+    {
+      "id": "dpdp-8-8",
+      "section": "§8(8)",
+      "title": "Grievance redressal",
+      "obligation": "Publish an accessible grievance mechanism with defined response times.",
+      "max_penalty_inr": 1000000000,
+      "immediate_action": "Publish DPO email; set SLA of 7 working days for first response.",
+      "liability_note": "Missing grievance channel is among the most commonly cited violations."
+    },
+    {
+      "id": "dpdp-9",
+      "section": "§9",
+      "title": "Processing of children's data",
+      "obligation": "Verifiable parental consent before processing children's personal data; no tracking/targeted ads.",
+      "max_penalty_inr": 2000000000,
+      "immediate_action": "Gate children endpoints; age-verify; remove behavioural tracking.",
+      "liability_note": "Highest reputational risk category."
+    },
+    {
+      "id": "dpdp-10",
+      "section": "§10",
+      "title": "Significant Data Fiduciary obligations",
+      "obligation": "Appoint DPO, conduct DPIA, audit data fiduciary duties.",
+      "max_penalty_inr": 1500000000,
+      "immediate_action": "Trigger DPIA; appoint DPO if classified as SDF.",
+      "liability_note": "Applicable if DPB classifies company as SDF based on volume/sensitivity."
+    },
+    {
+      "id": "dpdp-11",
+      "section": "§11",
+      "title": "Right to access / correction / erasure",
+      "obligation": "Provide data principals access, correction, completion, updating and erasure.",
+      "max_penalty_inr": 1000000000,
+      "immediate_action": "Build DSR workflow; ensure vendor can respond within 14 days.",
+      "liability_note": "Vendors that cannot return data on request create cascading §11 liability."
+    },
+    {
+      "id": "dpdp-16",
+      "section": "§16",
+      "title": "Cross-border transfer",
+      "obligation": "Transfer personal data outside India only to jurisdictions notified by the Central Government.",
+      "max_penalty_inr": 2000000000,
+      "immediate_action": "Review vendor data residency; add data-localisation clause if needed.",
+      "liability_note": "Unlisted-jurisdiction transfers invite both DPDP and sector-regulator action."
+    },
+    {
+      "id": "dpdp-17",
+      "section": "§17",
+      "title": "Exemptions",
+      "obligation": "Narrowly scoped exemptions — research, statistical, state-security.",
+      "max_penalty_inr": 500000000,
+      "immediate_action": "Do not over-claim exemption without DPO sign-off.",
+      "liability_note": "Over-broad exemption claims are routinely rejected by DPB."
+    },
+    {
+      "id": "dpdp-33",
+      "section": "§33",
+      "title": "Maximum financial penalties",
+      "obligation": "Schedule of penalties for each of the above obligations.",
+      "max_penalty_inr": 2500000000,
+      "immediate_action": "Prepare mitigation plan to argue lesser penalty before DPB.",
+      "liability_note": "Board may consider nature, gravity, duration, repetitiveness and gain."
+    }
+  ],
+  "finding_to_clause": {
+    "leaked_credentials": "dpdp-8-5",
+    "exposed_pii_endpoint": "dpdp-8-5",
+    "open_database_port": "dpdp-8-5",
+    "weak_tls": "dpdp-8-5",
+    "cve_exposure": "dpdp-8-5",
+    "misconfig_exposure": "dpdp-8-5",
+    "missing_consent_banner": "dpdp-6",
+    "missing_notice": "dpdp-5",
+    "no_lawful_basis": "dpdp-4",
+    "breach_history": "dpdp-8-6",
+    "retention_excess": "dpdp-8-7",
+    "childrens_data_unrestricted": "dpdp-9",
+    "no_dpo": "dpdp-10",
+    "no_grievance": "dpdp-8-8",
+    "no_dsr_support": "dpdp-11",
+    "cross_border_transfer": "dpdp-16",
+    "missing_dpa": "dpdp-8-4",
+    "bulk_exfiltration": "dpdp-8-5"
+  }
+}

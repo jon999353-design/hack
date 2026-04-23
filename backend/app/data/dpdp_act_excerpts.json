@@ -1,0 +1,90 @@
+{
+  "source": "Digital Personal Data Protection Act, 2023 — verbatim excerpts (public domain, Gazette of India)",
+  "notes": "Used as the retrieval corpus for the DPDP RAG engine when no external Act PDF is configured. Text here is lightly paraphrased from the public gazette for length; citations reference the exact section.",
+  "passages": [
+    {
+      "id": "p-4",
+      "section": "§4",
+      "page": 3,
+      "text": "A person may process the personal data of a Data Principal only in accordance with the provisions of this Act and for a lawful purpose for which the Data Principal has given her consent or for certain legitimate uses."
+    },
+    {
+      "id": "p-5",
+      "section": "§5",
+      "page": 4,
+      "text": "Every request for consent under the provisions of this Act shall be accompanied or preceded by a notice given by the Data Fiduciary to the Data Principal, informing her of the personal data proposed to be processed, the purpose for which it is proposed to be processed, the manner in which she may exercise her rights and the manner in which she may make a complaint to the Board."
+    },
+    {
+      "id": "p-6",
+      "section": "§6",
+      "page": 5,
+      "text": "The consent given by the Data Principal shall be free, specific, informed, unconditional and unambiguous with a clear affirmative action, and shall signify an agreement to the processing of her personal data for the specified purpose and be limited to such personal data as is necessary for such specified purpose."
+    },
+    {
+      "id": "p-7",
+      "section": "§7",
+      "page": 6,
+      "text": "A Data Fiduciary may process personal data of a Data Principal for any of the following legitimate uses, namely: for the specified purpose for which the Data Principal has voluntarily provided her personal data; for the State to provide or issue subsidy, benefit, service, certificate, licence or permit; for fulfilling an obligation under any law; for responding to a medical emergency; and for employment-related purposes."
+    },
+    {
+      "id": "p-8-4",
+      "section": "§8(4)",
+      "page": 7,
+      "text": "A Data Fiduciary may engage, appoint, use or otherwise involve a Data Processor to process personal data on its behalf for any activity related to the offering of goods or services to Data Principals only under a valid contract."
+    },
+    {
+      "id": "p-8-5",
+      "section": "§8(5)",
+      "page": 7,
+      "text": "A Data Fiduciary shall protect personal data in its possession or under its control, including in respect of any processing undertaken by it or on its behalf by a Data Processor, by taking reasonable security safeguards to prevent personal data breach."
+    },
+    {
+      "id": "p-8-6",
+      "section": "§8(6)",
+      "page": 7,
+      "text": "In the event of a personal data breach, the Data Fiduciary shall give the Board and each affected Data Principal, intimation of such breach in such form and manner as may be prescribed."
+    },
+    {
+      "id": "p-8-7",
+      "section": "§8(7)",
+      "page": 8,
+      "text": "A Data Fiduciary shall, unless retention is necessary for compliance with any law for the time being in force, erase personal data, upon the Data Principal withdrawing her consent or as soon as it is reasonable to assume that the specified purpose is no longer being served, whichever is earlier."
+    },
+    {
+      "id": "p-8-8",
+      "section": "§8(8)",
+      "page": 8,
+      "text": "A Data Fiduciary shall publish, in such manner as may be prescribed, the business contact information of a Data Protection Officer, if applicable, or a person who is able to answer on behalf of the Data Fiduciary, the questions, if any, raised by the Data Principal about the processing of her personal data."
+    },
+    {
+      "id": "p-9",
+      "section": "§9",
+      "page": 9,
+      "text": "The Data Fiduciary shall, before processing any personal data of a child or a person with disability who has a lawful guardian, obtain verifiable consent of the parent of such child or the lawful guardian. A Data Fiduciary shall not undertake tracking or behavioural monitoring of children or targeted advertising directed at children."
+    },
+    {
+      "id": "p-10",
+      "section": "§10",
+      "page": 10,
+      "text": "The Central Government may notify any Data Fiduciary or class of Data Fiduciaries as Significant Data Fiduciary on the basis of an assessment of such relevant factors as it may determine, including the volume and sensitivity of personal data processed; risk to the rights of Data Principals; potential impact on the sovereignty and integrity of India; risk to electoral democracy; security of the State; and public order. Every Significant Data Fiduciary shall appoint a Data Protection Officer based in India and undertake Data Protection Impact Assessments and periodic audits."
+    },
+    {
+      "id": "p-11",
+      "section": "§11",
+      "page": 11,
+      "text": "The Data Principal shall have the right to obtain from the Data Fiduciary a summary of personal data which is being processed and the processing activities undertaken, the identities of all other Data Fiduciaries and Data Processors with whom the personal data has been shared, along with a description of the personal data so shared."
+    },
+    {
+      "id": "p-16",
+      "section": "§16",
+      "page": 14,
+      "text": "The Central Government may, by notification, restrict the transfer of personal data by a Data Fiduciary for processing to such country or territory outside India as may be so notified."
+    },
+    {
+      "id": "p-33",
+      "section": "§33",
+      "page": 22,
+      "text": "The Board may, after giving the person concerned a reasonable opportunity of being heard, impose a monetary penalty on such person as specified in the Schedule, which may extend to two hundred and fifty crore rupees per instance of contravention; the Board shall have regard to the nature, gravity and duration of the breach, the type and nature of the personal data affected, the repetitive nature of the breach, and the gain made from or loss avoided by the breach."
+    }
+  ]
+}
