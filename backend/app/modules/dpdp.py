@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from app.modules.framework import crosswalk_for
 from app.modules.rag import retriever
 from app.schemas import DPDPMapping, Finding
 
@@ -67,6 +68,7 @@ def map_findings(findings: list[Finding]) -> list[DPDPMapping]:
                 liability_note=c["liability_note"],
                 rag_quote=quote,
                 rag_citation=citation,
+                crosswalk=crosswalk_for(c["section"]),
             )
         )
     return out
