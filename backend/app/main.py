@@ -6,12 +6,16 @@ Docs: http://localhost:8000/docs
 from __future__ import annotations
 
 import asyncio
+import io
+import json
 import time
+import zipfile
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import PlainTextResponse, Response
 from sse_starlette.sse import EventSourceResponse
 
 from app import __version__
@@ -514,6 +518,56 @@ async def contract_analyze(req: ContractAnalyzeRequest) -> dict:
 
 
 # ------------------------------------------------------------------ remediation playbook
+# NOTE: the .csv route MUST come before the plain route because FastAPI picks the
+# first matching path and `{vendor}` would otherwise swallow the ".csv" suffix.
+@app.get("/playbook/{vendor}.csv")
+async def get_playbook_csv(vendor: str) -> PlainTextResponse:
+    """Playbook as Jira / Linear / GitHub-Projects-compatible CSV."""
+    vendor = vendor.strip().lower()
+    scan = await store.load_scan(vendor)
+    if not scan:
+        raise HTTPException(404, f"No scan yet for '{vendor}'. POST /scan first.")
+    pb = playbook.build_for(scan)
+    # Flatten next_7_days + next_30_days + long_horizon + any 'tasks' / 'rows'
+    buckets = []
+    for key in ("next_7_days", "next_30_days", "long_horizon", "tasks", "rows"):
+        v = pb.get(key)
+        if isinstance(v, list):
+            buckets.extend([(key, r) for r in v])
+    rows = [
+        "Vendor,Bucket,Section,Owner,SLA_days,Savings_INR,Title,Summary,Frameworks"
+    ]
+    import csv as _csv
+    import io as _io
+
+    sio = _io.StringIO()
+    w = _csv.writer(sio, quoting=_csv.QUOTE_ALL)
+    w.writerow(["Vendor", "Bucket", "Section", "Owner", "SLA_days", "Savings_INR", "Title", "Summary", "Frameworks"])
+    for bucket, row in buckets:
+        cx = row.get("crosswalk") or {}
+        fw = ";".join(
+            [f"ISO:{c}" for c in (cx.get("iso27001") or [])]
+            + [f"SOC2:{c}" for c in (cx.get("soc2") or [])]
+            + [f"NIST:{c}" for c in (cx.get("nist_csf") or [])]
+        )
+        w.writerow([
+            vendor,
+            bucket,
+            row.get("section", ""),
+            row.get("owner", ""),
+            row.get("sla_days", row.get("sla", "")),
+            row.get("savings_inr", row.get("impact_inr", "")),
+            row.get("title", row.get("label", "")),
+            (row.get("summary") or row.get("obligation") or "")[:300],
+            fw,
+        ])
+    return PlainTextResponse(
+        content=sio.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="playbook-{vendor}.csv"'},
+    )
+
+
 @app.get("/playbook/{vendor}")
 async def get_playbook(vendor: str) -> dict:
     vendor = vendor.strip().lower()
@@ -521,6 +575,107 @@ async def get_playbook(vendor: str) -> dict:
     if not scan:
         raise HTTPException(404, f"No scan yet for '{vendor}'. POST /scan first.")
     return playbook.build_for(scan)
+
+
+# ------------------------------------------------------------------ audit bundle (v3.2)
+@app.get("/audit/{vendor}.zip")
+async def audit_bundle(vendor: str):
+    """One-click DPDP evidence pack:
+    scan.json + playbook.json + recent_alerts.json + contract_analysis.json (if any) +
+    Board report PDF + CERT-In incident PDF (if any alert) + README.md.
+    Hand this ZIP to the Data Protection Board / auditor.
+    """
+    vendor = vendor.strip().lower()
+    scan = await store.load_scan(vendor)
+    if not scan:
+        raise HTTPException(404, f"No scan yet for '{vendor}'. POST /scan first.")
+
+    pb = playbook.build_for(scan)
+    all_alerts = await store.recent_alerts(500)
+    vendor_alerts = [a for a in all_alerts if (a.get("vendor") or "").lower() == vendor]
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(f"{vendor}/scan.json", json.dumps(scan, indent=2, default=str))
+        zf.writestr(f"{vendor}/playbook.json", json.dumps(pb, indent=2, default=str))
+        zf.writestr(
+            f"{vendor}/alerts.json",
+            json.dumps(vendor_alerts, indent=2, default=str),
+        )
+        # Board PDF
+        try:
+            pdf = report.render_pdf(scan)
+            zf.writestr(f"{vendor}/board-report.pdf", pdf)
+        except Exception as e:  # noqa: BLE001
+            zf.writestr(f"{vendor}/board-report.error.txt", f"render failed: {e}")
+        # CERT-In PDF (first critical alert, if any)
+        crit = next((a for a in vendor_alerts if a.get("severity") in ("critical", "high")), None)
+        if crit:
+            try:
+                certin = incident.render_pdf(crit, scan)
+                zf.writestr(
+                    f"{vendor}/certin-incident-{crit.get('id', 'alert')}.pdf", certin
+                )
+            except Exception as e:  # noqa: BLE001
+                zf.writestr(f"{vendor}/certin-incident.error.txt", f"render failed: {e}")
+
+        readme = _audit_readme(vendor, scan, pb, vendor_alerts)
+        zf.writestr(f"{vendor}/README.md", readme)
+
+    buf.seek(0)
+    filename = f"vendorguard-audit-{vendor}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.zip"
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _audit_readme(vendor: str, scan: dict, pb: dict, alerts: list[dict]) -> str:
+    score = scan.get("trust_score") or scan.get("score") or "—"
+    band = scan.get("band", "—")
+    exposure = scan.get("dpdp_exposure_inr") or scan.get("exposure_inr") or 0
+    findings = len(scan.get("findings") or [])
+    dpdp_count = len(scan.get("dpdp") or scan.get("dpdp_mappings") or [])
+    bucket_lines = []
+    for key in ("next_7_days", "next_30_days", "long_horizon"):
+        items = pb.get(key) or []
+        if items:
+            bucket_lines.append(f"- **{key}** — {len(items)} action(s)")
+    return f"""# VendorGuard AI — DPDP Audit Evidence Bundle
+
+Vendor: **{vendor}**
+Generated: {datetime.now(timezone.utc).isoformat()}
+Tool: VendorGuard AI v{__version__}
+
+## Snapshot
+- Trust score: **{score}/100** · band **{band}**
+- DPDP ₹ exposure: **{exposure}**
+- OSINT findings: {findings}
+- DPDP clauses triggered: {dpdp_count}
+- Alerts tied to this vendor: {len(alerts)}
+
+## Files in this bundle
+- `scan.json` — full OSINT + scoring + DPDP mapping payload (machine-readable).
+- `playbook.json` — Monday remediation playbook: owners, SLAs, ₹ savings, frameworks.
+- `alerts.json` — gateway / canary / rule-engine alerts observed for this vendor.
+- `board-report.pdf` — CISO-ready PDF (same content served by `GET /report/{{vendor}}.pdf`).
+- `certin-incident-*.pdf` — CERT-In 6-hour incident Form-A (if a critical alert exists).
+- `README.md` — this file.
+
+## Playbook summary
+{chr(10).join(bucket_lines) or "- (no remediation actions)"}
+
+## How an auditor verifies this
+1. Every DPDP mapping in `scan.json` carries a verbatim Act quote + gazette-page
+   citation under the `rag_quote` / `rag_citation` fields. Cross-check against
+   the DPDP Act 2023 Gazette (already indexed in VendorGuard's 49-passage corpus).
+2. Every playbook row has a framework crosswalk (`iso27001` / `soc2` / `nist_csf`)
+   so a GRC programme can be re-scoped without re-running the scan.
+3. All timestamps are ISO-8601 UTC. All monetary values are INR (₹).
+
+Rules where rules belong. ML where ML belongs. LLM only for polish. Nothing hidden.
+"""
 
 
 # ------------------------------------------------------------------ executive / portfolio

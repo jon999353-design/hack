@@ -312,18 +312,26 @@ def test_osint_live_endpoint(client):
 
 
 def test_benchmark_ledger(client):
-    """v3.1: the Evidence Ledger must expose 3 canned DPAs (strong/ambiguous/weak)
-    and every detail call must return full gap analysis with evidence trace."""
+    """v3.1/v3.2: the Evidence Ledger must expose 4 canned DPAs
+    (strong / ambiguous / weak / saas-commodity) with per-DPA full analysis
+    carrying confidence + evidence trace."""
     r = client.get("/benchmark/dpas")
     assert r.status_code == 200
     ids = {d["id"] for d in r.json()["dpas"]}
-    assert ids == {"strong-dpa", "ambiguous-dpa", "weak-dpa"}
+    assert ids == {"strong-dpa", "ambiguous-dpa", "weak-dpa", "saas-commodity-dpa"}
     # Strong DPA ≥ 60% coverage; weak DPA ≤ 25%
     strong = client.get("/benchmark/dpas/strong-dpa").json()
     assert strong["analysis"]["coverage_pct"] >= 60
     weak = client.get("/benchmark/dpas/weak-dpa").json()
     assert weak["analysis"]["coverage_pct"] <= 25
     assert weak["analysis"]["red_count"] >= 3
+    # Every gap in the weak analysis must carry a confidence field (v3.1 evidence trace).
+    assert all("confidence" in g for g in weak["analysis"]["gaps"])
+    # Commodity-SaaS DPA: GDPR-era boilerplate, DPDP-silent — rule engine should
+    # surface some hits (it has 72h breach language etc.) but stay short of strong.
+    saas = client.get("/benchmark/dpas/saas-commodity-dpa").json()
+    assert 0 <= saas["analysis"]["coverage_pct"] < 70
+    assert len(saas["analysis"]["gaps"]) > 0
 
 
 def test_scan_history_and_diff(client):
@@ -351,3 +359,41 @@ def test_scan_history_and_diff(client):
         "resolved_clauses",
     ):
         assert k in d
+
+
+def test_audit_bundle_zip(client):
+    """v3.2: /audit/{vendor}.zip returns a valid DPDP evidence pack."""
+    import io as _io
+    import zipfile as _zf
+
+    # Ensure vendor has a scan
+    client.post("/scan", json={"vendor": "paytrust-partner.com"})
+    r = client.get("/audit/paytrust-partner.com.zip")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/zip"
+    zf = _zf.ZipFile(_io.BytesIO(r.content))
+    names = set(zf.namelist())
+    # Required artefacts in the bundle
+    assert "paytrust-partner.com/scan.json" in names
+    assert "paytrust-partner.com/playbook.json" in names
+    assert "paytrust-partner.com/alerts.json" in names
+    assert "paytrust-partner.com/README.md" in names
+    # Board PDF must be a real PDF
+    pdf = zf.read("paytrust-partner.com/board-report.pdf")
+    assert pdf[:4] == b"%PDF"
+
+
+def test_audit_bundle_404_for_unknown_vendor(client):
+    r = client.get("/audit/never-scanned-vendor.example.zip")
+    assert r.status_code == 404
+
+
+def test_playbook_csv_export(client):
+    """v3.2: playbook CSV export works and has the expected header row."""
+    client.post("/scan", json={"vendor": "paytrust-partner.com"})
+    r = client.get("/playbook/paytrust-partner.com.csv")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/csv")
+    first_line = r.text.splitlines()[0]
+    # quoted CSV header
+    assert "Vendor" in first_line and "Section" in first_line and "Frameworks" in first_line

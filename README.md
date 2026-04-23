@@ -1,4 +1,4 @@
-# VendorGuard AI  &nbsp;·&nbsp; v3.1
+# VendorGuard AI  &nbsp;·&nbsp; v3.2
 
 > **The Vendor Access Control Plane for DPDP-compliant India.**
 > Scan → Score → DPDP-map → Gateway-protect → **Fix the contract** — every finding grounded in the DPDP Act (§-numbered, gazette-page cited, ₹-penalty mapped) and crosswalked to ISO 27001 / SOC 2 / NIST CSF.
@@ -33,7 +33,16 @@ L5  Contract Intel   17 rules · evidence trace (keyword+offset+snippet+conf)
                      · red/amber/green verdict · Act quote · rewrite
 ```
 
-## What's new in v3.1
+## What's new in v3.2
+
+- **One-click DPDP Audit Evidence Bundle** — `GET /audit/{vendor}.zip` returns a ZIP containing `scan.json` + `playbook.json` + `alerts.json` + board-report PDF + CERT-In incident PDF (if any alert) + README. Ship directly to the Data Protection Board. Wired into the **Board PDF · Audit ZIP** sub-tab in Remediation.
+- **Compliance Diff sub-tab** — picks any two historical scans of the same vendor and renders score delta, ₹ exposure delta, new/resolved findings, new/resolved DPDP clauses, summary. Backed by the existing `/scan/{v}/history` + `/scan/{v}/diff` endpoints.
+- **Playbook CSV export** — `GET /playbook/{vendor}.csv` with Jira / Linear / GitHub-Projects-compatible headers (Vendor, Bucket, Section, Owner, SLA_days, Savings_INR, Title, Summary, Frameworks). One-click download button on the Playbook panel header.
+- **Fourth benchmark DPA** — `saas-commodity-dpa` (commodity-SaaS GDPR-era boilerplate, DPDP-silent). Shows the rule engine behaviour on real-world global-SaaS language that isn't clearly weak but is clearly DPDP-uncompliant.
+- **Demo mode v2** — 8-step pitch walk now clicks the Benchmark "Weak DPA" chip (so judges watch the rule engine fire on a reproducible canned DPA) and then flips to the new Compliance Diff sub-tab to show "since last scan" currency.
+- **30/30 tests** passing (27 → 30: +audit bundle, +404 case, +playbook CSV, +saas-commodity benchmark).
+
+## What was in v3.1
 
 - **Nav consolidation** — 13-item sidebar → **5 top-level panels** (Executive Board / Vendor Scan / Contract Intel / Live Defense / Remediation). Ask DPDP stays as the floating drawer (`/` hotkey). Sub-tabs handle depth. Built for a 90-second pitch arc.
 - **Contract Intel v2** — 12 rules → **17 rules**. New: §9 children (verifiable parental consent, no profiling), §17 exemption over-claim, §8(3) accuracy, §8(5) log retention (Rule 6), §10 SDF uplift. Every verdict now carries a **confidence score** (0.55-0.99), **evidence trace** (keyword+offset+snippet), and **red_flags_trace**.
