@@ -256,43 +256,190 @@ _RULES: list[dict[str, Any]] = [
             "notice, in accordance with §8(4) of the DPDP Act, 2023."
         ),
     },
+    # ---------------------------------------------------------- v3.1 additions
+    {
+        "section": "§9",
+        "label": "Children's data — verifiable parental consent, no profiling",
+        "evidence_keywords": [
+            "verifiable parental consent", "parental consent",
+            "children's data", "children data", "minors",
+            "not process children", "age-gate", "age gating",
+            "no behavioural tracking of children",
+            "no targeted advertising to children",
+        ],
+        "red_flags": [
+            r"may (track|profile|target) (children|minor|users under 18)",
+            r"personalised ads for (children|minors)",
+            r"no age verification",
+            r"behavioural monitoring of (children|minors)",
+        ],
+        "rewrite": (
+            "Processor shall not Process the Personal Data of a child (a Data "
+            "Principal under eighteen years of age) without verifiable consent "
+            "of a parent or lawful guardian obtained in accordance with Rule 10 "
+            "of the DPDP Rules, 2025, and shall not undertake tracking, "
+            "behavioural monitoring, or targeted advertising directed at "
+            "children, in accordance with §9 of the DPDP Act, 2023."
+        ),
+    },
+    {
+        "section": "§8(3)",
+        "label": "Accuracy of personal data used for decisions",
+        "evidence_keywords": [
+            "accuracy of personal data", "accurate and up to date",
+            "data accuracy", "correct personal data", "keep records accurate",
+        ],
+        "red_flags": [
+            r"no obligation to verify accuracy",
+            r"data provided as[- ]is without verification",
+        ],
+        "rewrite": (
+            "Processor shall ensure the completeness, accuracy and consistency "
+            "of the Personal Data it Processes on Controller's behalf, "
+            "including where such Personal Data is used to make a decision "
+            "affecting the Data Principal or is disclosed to another Data "
+            "Fiduciary, in accordance with §8(3) of the DPDP Act, 2023."
+        ),
+    },
+    {
+        "section": "§8(5)-logs",
+        "label": "Retention of security logs for at least one year (Rule 6)",
+        "evidence_keywords": [
+            "retain logs for one year", "logs retained for 12 months",
+            "logs retained for twelve months", "audit logs for one year",
+            "log retention", "12 months of logs",
+        ],
+        "red_flags": [
+            r"logs are not retained",
+            r"logs retained for (?:30|60|90) days",
+            r"logs retained for less than (?:three|six|twelve) months",
+        ],
+        "rewrite": (
+            "Processor shall retain logs and such Personal Data as are "
+            "necessary for detection, investigation and remediation of "
+            "unauthorised access for a minimum period of twelve (12) months, "
+            "in accordance with Rule 6(e) of the DPDP Rules, 2025."
+        ),
+    },
+    {
+        "section": "§17",
+        "label": "Exemption claims narrowly scoped (no over-claim)",
+        "evidence_keywords": [
+            "statutory exemption", "§17", "section 17",
+            "processing for research", "archiving purposes",
+            "statistical purposes",
+        ],
+        "red_flags": [
+            r"exempt(ed)? from all provisions of the (dpdp )?act",
+            r"(act|dpdp) does not apply to this processing",
+            r"blanket exemption",
+        ],
+        "rewrite": (
+            "Where Processor claims an exemption under §17 of the DPDP Act, "
+            "2023, it shall document the specific sub-clause relied upon, "
+            "limit the exempt processing to the narrowest scope necessary, "
+            "and apply the standards in Schedule II of the DPDP Rules, 2025 "
+            "(lawful, purpose-limited, minimum necessary, with reasonable "
+            "security safeguards)."
+        ),
+    },
+    {
+        "section": "§10-sdf",
+        "label": "SDF uplift — annual DPIA, audit, algorithmic due diligence",
+        "evidence_keywords": [
+            "annual dpia", "data protection impact assessment annually",
+            "independent data auditor", "algorithmic due diligence",
+            "audit once every twelve months",
+        ],
+        "red_flags": [
+            r"no obligation to conduct dpia",
+            r"dpia not required",
+        ],
+        "rewrite": (
+            "Where Controller is classified as a Significant Data Fiduciary "
+            "under §10 of the DPDP Act, 2023, Processor shall cooperate with "
+            "Controller to undertake a Data Protection Impact Assessment and "
+            "an audit once every twelve months, shall assist Controller's "
+            "appointed independent data auditor, and shall observe due "
+            "diligence to verify that any algorithmic software deployed in "
+            "connection with the Services does not pose a risk to the rights "
+            "of Data Principals, in accordance with Rule 13 of the DPDP "
+            "Rules, 2025."
+        ),
+    },
 ]
 
 
-def _find_evidence(text: str, keywords: list[str]) -> list[str]:
-    out: list[str] = []
+def _find_evidence(text: str, keywords: list[str]) -> list[dict]:
+    """Return [{keyword, offset, snippet}]. Trace is verifiable by the judge."""
+    out: list[dict] = []
     low = text.lower()
     for kw in keywords:
         idx = low.find(kw.lower())
         if idx >= 0:
             start = max(0, idx - 30)
             end = min(len(text), idx + len(kw) + 40)
-            out.append(text[start:end].strip().replace("\n", " "))
-            if len(out) >= 2:
+            out.append({
+                "keyword": kw,
+                "offset": idx,
+                "snippet": text[start:end].strip().replace("\n", " "),
+            })
+            if len(out) >= 3:
                 break
     return out
 
 
-def _find_red_flags(text: str, patterns: list[str]) -> list[str]:
-    out: list[str] = []
+def _find_red_flags(text: str, patterns: list[str]) -> list[dict]:
+    """Return [{pattern, offset, snippet, matched}]. Each hit is a full regex trace."""
+    out: list[dict] = []
     for pat in patterns:
         m = re.search(pat, text, flags=re.IGNORECASE)
         if m:
             idx = m.start()
             start = max(0, idx - 30)
             end = min(len(text), m.end() + 40)
-            out.append(text[start:end].strip().replace("\n", " "))
-            if len(out) >= 2:
+            out.append({
+                "pattern": pat,
+                "offset": idx,
+                "matched": m.group(0),
+                "snippet": text[start:end].strip().replace("\n", " "),
+            })
+            if len(out) >= 3:
                 break
     return out
 
 
-def _status_for(evidence: list[str], red_flags: list[str], missing_is_red: bool = False) -> str:
+def _status_for(evidence: list[dict], red_flags: list[dict], missing_is_red: bool = False) -> str:
     if red_flags:
         return "red"
     if evidence:
         return "green"
     return "red" if missing_is_red else "amber"
+
+
+def _confidence_for(
+    status: str,
+    evidence: list[dict],
+    red_flags: list[dict],
+    missing_is_red: bool = False,
+) -> float:
+    """Return a 0.0–0.99 confidence score. Rationale:
+
+    * red (from red-flag regex) — literal anti-pattern hit in the contract text;
+      base 0.90, +0.03 per additional hit, cap 0.99.
+    * red (missing + mandatory) — no evidence AND clause is non-negotiable;
+      base 0.75 (we're sure it's missing but inferring is slightly softer).
+    * green — explicit evidence found; base 0.65, +0.08 per additional keyword, cap 0.95.
+    * amber (missing, not mandatory) — fixed 0.55 (we don't know the absence is
+      material without business context).
+    """
+    if status == "red" and red_flags:
+        return min(0.99, 0.90 + 0.03 * (len(red_flags) - 1))
+    if status == "red" and missing_is_red:
+        return 0.75
+    if status == "green":
+        return min(0.95, 0.65 + 0.08 * (len(evidence) - 1))
+    return 0.55
 
 
 def _penalty_for(section: str) -> int:
@@ -315,9 +462,11 @@ def analyze(text: str) -> dict[str, Any]:
     gaps: list[dict[str, Any]] = []
     for rule in _RULES:
         section = rule["section"]
-        evidence = _find_evidence(text, rule["evidence_keywords"])
-        red_flags = _find_red_flags(text, rule["red_flags"])
-        status = _status_for(evidence, red_flags, bool(rule.get("missing_is_red")))
+        missing_is_red = bool(rule.get("missing_is_red"))
+        evidence_trace = _find_evidence(text, rule["evidence_keywords"])
+        red_flags_trace = _find_red_flags(text, rule["red_flags"])
+        status = _status_for(evidence_trace, red_flags_trace, missing_is_red)
+        confidence = _confidence_for(status, evidence_trace, red_flags_trace, missing_is_red)
 
         base_section = section.split("-")[0]
         hit = r.lookup_clause(base_section)
@@ -332,10 +481,16 @@ def analyze(text: str) -> dict[str, Any]:
             "rule_id": section,
             "label": rule["label"],
             "status": status,
+            "confidence": round(confidence, 2),
             "obligation": _obligation_for(section),
             "penalty_inr": _penalty_for(section),
-            "evidence": evidence,
-            "red_flags": red_flags,
+            # back-compat: snippet-only lists (what the existing UI renders)
+            "evidence": [e["snippet"] for e in evidence_trace],
+            "red_flags": [r["snippet"] for r in red_flags_trace],
+            # new in v3.1: full trace so judges can click through to the exact
+            # offset + keyword / regex that produced the verdict.
+            "evidence_trace": evidence_trace,
+            "red_flags_trace": red_flags_trace,
             "rag_quote": rag_quote,
             "rag_citation": rag_citation,
             "recommended_rewrite": rule["rewrite"],

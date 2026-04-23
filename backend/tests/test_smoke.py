@@ -269,3 +269,43 @@ def test_scan_response_includes_crosswalk(client):
     r = client.post("/scan", json={"vendor": "paytrust-partner.com"})
     body = r.json()
     assert any(m.get("crosswalk", {}).get("iso27001") for m in body["dpdp"])
+
+
+# -------------------------------------------------------------- v3.1 upgrades
+def test_contract_intel_has_confidence_and_trace(client):
+    """v3.1: every gap returns a confidence score + evidence/red-flag trace
+    with offsets so judges can reproduce the verdict."""
+    weak = (
+        "This agreement covers vendor services. Vendor will use best efforts to "
+        "secure data. Vendor may store data in United States data centers. "
+        "Vendor may target minors with personalised ads for children."
+    )
+    r = client.post("/contract/analyze", json={"contract_text": weak})
+    body = r.json()
+    for g in body["gaps"]:
+        assert "confidence" in g and 0.0 < g["confidence"] <= 0.99
+        assert "evidence_trace" in g
+        assert "red_flags_trace" in g
+    # v3.1 rules must be present
+    sections = {g["section"] for g in body["gaps"]}
+    assert {"§9", "§17", "§8(3)"}.issubset(sections)
+    # Red flag on §9 (children profiling) should have a populated trace with a
+    # regex matched string.
+    child_rows = [g for g in body["gaps"] if g["section"] == "§9"]
+    assert any(
+        any("matched" in t for t in g.get("red_flags_trace", []))
+        for g in child_rows
+    )
+
+
+def test_osint_live_endpoint(client):
+    """v3.1: /osint/live/{vendor} calls crt.sh directly — the response must
+    include the verify_url so a judge can reproduce the query, even when the
+    external service is unreachable."""
+    r = client.get("/osint/live/example.com")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["source"].startswith("crt.sh")
+    assert "verify_url" in body and "crt.sh" in body["verify_url"]
+    assert "latency_ms" in body
+    assert isinstance(body["subdomains"], list)
