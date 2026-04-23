@@ -1,11 +1,26 @@
-# VendorGuard AI  &nbsp;·&nbsp; v2.0
+# VendorGuard AI  &nbsp;·&nbsp; v3.0
 
 > **The Vendor Access Control Plane for DPDP-compliant India.**
-> Scan → Score → Gateway-protect → Auto-respond — with every finding mapped to a DPDP Act clause and ₹ penalty.
+> Scan → Score → DPDP-map → Gateway-protect → **Fix the contract** — every finding grounded in the DPDP Act and crosswalked to ISO 27001 / SOC 2 / NIST CSF.
 
 ![status](https://img.shields.io/badge/status-hackathon%20ready-success) ![stack](https://img.shields.io/badge/stack-FastAPI%20%2B%20Tailwind-blue) ![ml](https://img.shields.io/badge/ML-IsolationForest-6366f1) ![nuclei](https://img.shields.io/badge/scanner-ProjectDiscovery%20nuclei-ef4444) ![rag](https://img.shields.io/badge/DPDP-RAG%20over%20Gazette-f59e0b) ![pdf](https://img.shields.io/badge/report-ReportLab%20PDF-0f766e) ![sse](https://img.shields.io/badge/live-SSE%20alerts-0ea5e9) ![license](https://img.shields.io/badge/license-MIT-green)
 
 Built for **Athernex** (DSCE × BMSCE) by Team Rashi Innovators.
+
+---
+
+## What's new in v3.0
+
+- **Layer 5 — Contract Intelligence** (`POST /contract/analyze`). Paste a vendor DPA; get per-clause red/amber/green, ₹ penalty, recommended rewrite, and DPDP Act gazette quote. 12 rules cover §4, §5, §6, §7, §8(4–8), §10, §11, §16. Optional `polish_rewrites=true` calls Claude/GPT/OpenRouter to soften the template language.
+- **Executive Board** (`GET /portfolio`). Cross-vendor KPIs: vendors tracked, avg trust score, total ₹ exposure, attacks blocked, ₹ saved; band histogram; worst-offender leaderboard; top DPDP clauses triggered; ISO 27001 / SOC 2 / NIST CSF crosswalk chips — all in one screen.
+- **Monday Playbook** (`GET /playbook/{vendor}`). Remediation checklist grouped by DPDP clause, sorted by ₹ impact, with owner, SLA (7 / 30 / long), triggering findings, RAG quote and framework crosswalk per row.
+- **Framework crosswalk** (`GET /framework/crosswalk`). Every DPDP finding now carries an `iso27001 / soc2 / nist_csf` control list — written in machine-readable form for GRC pipelines.
+- **CERT-In 6-hour report** (`GET /incident/{alert_id}.pdf`). Pre-filled Form-A equivalent PDF for an in-progress breach. Hand to the regulator in under 6 hours.
+- **Bulk onboarding** (`POST /vendors/bulk`). Scan up to 25 domains in parallel.
+- **Generic webhook alerts**. Set `ALERT_WEBHOOK_URL=…` and every gateway containment is dispatched as Slack-compatible JSON (works with Slack, Teams, PagerDuty, Zapier).
+- **Live KPI ticker** (`GET /kpis`). Lightweight header chips: `₹ saved` + `blocks` — refresh every 15s.
+- **Floating Ask DPDP drawer**. Press `/` from anywhere; get RAG answers with verbatim gazette citations.
+- **Upgraded Demo Mode** — 7-step narrated walkthrough covering Executive Board → scan → DPDP → Playbook → Contract Intel → Gateway → Ask DPDP.
 
 ---
 
@@ -30,14 +45,13 @@ See `WHAT_WE_UPGRADED.md` for the full before/after breakdown.
 
 ## What this is
 
-A working MVP that demonstrates all 4 runtime layers pitched in the deck:
+A working MVP that demonstrates all 5 runtime layers pitched in the deck:
 
 1. **Pre-Onboarding Intelligence** — OSINT scan: Shodan, HaveIBeenPwned, crt.sh, VirusTotal, DNS, TLS, **ProjectDiscovery nuclei** (with graceful mock fallback).
 2. **Trust Score Engine** — capped weighted score, 0–100, Safe / Watch / Block bands.
-3. **DPDP Compliance Mapper** — each finding → DPDP Act 2023 clause → ₹ penalty → verbatim Act quote (RAG).
-4. **Vendor Access Gateway** — IsolationForest ML + rule-based policy + autonomous response + WhatsApp/SSE alerts.
-
-Layer 5 (Contract Intelligence) is documented as a **finals-stretch feature** in `docs/HACKATHON_DAY_PLAN.md`.
+3. **DPDP Compliance Mapper** — each finding → DPDP Act 2023 clause → ₹ penalty → verbatim Act quote (RAG) → ISO 27001 / SOC 2 / NIST CSF crosswalk.
+4. **Vendor Access Gateway** — IsolationForest ML + rule-based policy + autonomous response + WhatsApp/SSE/webhook alerts + CERT-In 6-hour PDF.
+5. **Contract Intelligence** — paste a vendor DPA; get per-clause red/amber/green, ₹ penalty, recommended rewrite, gazette quote and framework crosswalk.
 
 ---
 
