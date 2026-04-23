@@ -1408,7 +1408,401 @@ Cite: ${m.rag_citation || ''}`;
     }
 
     // =========================================================================
-    // Demo mode (Upgrade 4)
+    // Executive Board / Portfolio (v3.0)
+    // =========================================================================
+    async function refreshKPIChips() {
+      try {
+        const k = await api('/kpis');
+        if (k.savings_inr >= 0) {
+          $('kpi-savings-chip').textContent = `₹ saved: ${fmtINR(k.savings_inr)}`;
+          $('kpi-savings-chip').classList.remove('hidden');
+        }
+        if (k.attacks_blocked >= 0) {
+          $('kpi-blocks-chip').textContent = `blocks: ${k.attacks_blocked}`;
+          $('kpi-blocks-chip').classList.remove('hidden');
+        }
+      } catch {}
+    }
+
+    function animateCount(el, target, prefix='', suffix='', isInr=false) {
+      const start = parseInt((el.dataset.cur || '0'), 10) || 0;
+      const t0 = performance.now();
+      const dur = 900;
+      function tick(t) {
+        const p = Math.min(1, (t - t0) / dur);
+        const eased = 1 - Math.pow(1 - p, 3);
+        const n = Math.round(start + (target - start) * eased);
+        el.textContent = isInr ? fmtINR(n) : `${prefix}${n.toLocaleString('en-IN')}${suffix}`;
+        if (p < 1) requestAnimationFrame(tick);
+        else el.dataset.cur = String(target);
+      }
+      requestAnimationFrame(tick);
+    }
+
+    async function refreshPortfolio() {
+      try {
+        const p = await api('/portfolio');
+        animateCount($('kpi-vendors'), p.vendors_tracked);
+        $('kpi-avg').textContent = p.avg_trust_score || '—';
+        animateCount($('kpi-total-exposure'), p.total_exposure_inr, '', '', true);
+        animateCount($('kpi-attacks'), p.attacks_blocked);
+        animateCount($('kpi-savings'), p.savings_inr, '', '', true);
+
+        const bands = p.bands || {};
+        const total = Math.max((bands.safe||0) + (bands.watch||0) + (bands.block||0), 1);
+        const bcfg = [
+          {k:'safe', c:'#10b981', label:'Safe ≥80'},
+          {k:'watch', c:'#f59e0b', label:'Watch 50–79'},
+          {k:'block', c:'#ef4444', label:'Block <50'},
+        ];
+        $('band-bars').innerHTML = bcfg.map(b => {
+          const n = bands[b.k] || 0;
+          const pct = Math.round((n / total) * 100);
+          return `
+            <div>
+              <div class="flex items-center justify-between text-xs">
+                <span style="color:${b.c}">● ${b.label}</span>
+                <span class="mono">${n}</span>
+              </div>
+              <div class="h-2 rounded bg-slate-800 overflow-hidden mt-1">
+                <div class="h-full" style="width:${pct}%; background:${b.c}; transition: width 800ms ease;"></div>
+              </div>
+            </div>`;
+        }).join('');
+
+        const rows = p.leaderboard || [];
+        const tbody = $('leaderboard-rows');
+        if (!rows.length) {
+          tbody.innerHTML = `<tr><td colspan="5" class="py-3 text-slate-500 text-sm italic">No scans yet — scan a vendor.</td></tr>`;
+        } else {
+          tbody.innerHTML = rows.map(v => {
+            const col = v.band === 'safe' ? '#10b981' : v.band === 'block' ? '#ef4444' : '#f59e0b';
+            return `
+              <tr class="align-middle">
+                <td class="py-2 mono text-slate-200">${esc(v.vendor)}</td>
+                <td class="py-2 mono" style="color:${col}">${v.score}</td>
+                <td class="py-2 text-xs"><span class="chip mono" style="color:${col};border-color:${col}55;background:${col}18">${esc(v.band)}</span></td>
+                <td class="py-2 mono text-rose-300 text-right">${fmtINR(v.exposure_inr)}</td>
+                <td class="py-2 text-right"><button class="btn-ghost px-2 py-0.5 rounded text-[11px]" data-lb="${esc(v.vendor)}">open →</button></td>
+              </tr>`;
+          }).join('');
+          $$('#leaderboard-rows button[data-lb]').forEach(b => b.addEventListener('click', () => {
+            $('vendor-input').value = b.dataset.lb;
+            doScan();
+            navTo('overview');
+          }));
+        }
+
+        const tc = p.top_clauses || [];
+        const maxTc = Math.max(...tc.map(x => x.vendors_affected), 1);
+        $('top-clauses').innerHTML = tc.length ? tc.map(c => {
+          const pct = Math.round((c.vendors_affected / maxTc) * 100);
+          return `
+            <div>
+              <div class="flex items-center justify-between text-xs">
+                <span class="mono text-amber-300">${esc(c.clause)}</span>
+                <span class="mono text-slate-400">${c.vendors_affected} vendor${c.vendors_affected===1?'':'s'}</span>
+              </div>
+              <div class="h-2 rounded bg-slate-800 overflow-hidden mt-1">
+                <div class="h-full" style="width:${pct}%; background:#f59e0b; transition: width 800ms ease;"></div>
+              </div>
+            </div>`;
+        }).join('') : `<div class="text-xs text-slate-500 italic">No clauses triggered yet.</div>`;
+
+        const fc = p.framework_coverage || {};
+        const renderCtl = (title, items, color) => {
+          if (!items || !items.length) return '';
+          return `<div>
+            <div class="text-[10px] uppercase tracking-wider mb-1" style="color:${color}">${title}</div>
+            <div class="flex flex-wrap gap-1.5">
+              ${items.slice(0,6).map(([k,n]) => `<span class="chip mono" style="color:${color}; border-color:${color}55; background:${color}18">${esc(k)} <span class="text-slate-500">·</span> <span class="text-slate-200">${n}</span></span>`).join('')}
+            </div>
+          </div>`;
+        };
+        $('framework-coverage').innerHTML =
+          renderCtl('ISO 27001:2022 controls', fc.iso27001_controls_triggered, '#60a5fa') +
+          renderCtl('SOC 2 TSC', fc.soc2_criteria_triggered, '#a855f7') +
+          renderCtl('NIST CSF 2.0', fc.nist_csf_functions_triggered, '#34d399');
+
+        $('kpi-savings-chip').textContent = `₹ saved: ${fmtINR(p.savings_inr)}`;
+        $('kpi-savings-chip').classList.remove('hidden');
+        $('kpi-blocks-chip').textContent = `blocks: ${p.attacks_blocked}`;
+        $('kpi-blocks-chip').classList.remove('hidden');
+      } catch (e) {
+        console.warn('portfolio failed', e);
+      }
+    }
+
+    async function runBulkScan() {
+      const raw = $('bulk-input').value || '';
+      const list = raw.split(/[\s,;\n]+/).map(v => v.trim().toLowerCase()).filter(Boolean);
+      if (!list.length) {
+        $('bulk-result').textContent = 'paste at least one vendor domain.';
+        return;
+      }
+      $('bulk-scan-btn').disabled = true;
+      $('bulk-scan-btn').textContent = 'Scanning…';
+      $('bulk-result').textContent = `scanning ${list.length} vendor(s) in parallel…`;
+      try {
+        const r = await api('/vendors/bulk', { method:'POST', body: JSON.stringify({ vendors: list }) });
+        $('bulk-result').innerHTML = `scanned ${r.count} vendor(s): ` +
+          r.results.map(x => x.error
+            ? `<span class="text-rose-300 mono">${esc(x.vendor)}: ${esc(x.error)}</span>`
+            : `<span class="chip mono" style="margin-right:4px">${esc(x.vendor)} <span class="text-slate-500">·</span> ${x.score}/${esc(x.band)} <span class="text-slate-500">·</span> ${fmtINR(x.exposure_inr)}</span>`
+          ).join(' ');
+        await refreshPortfolio();
+        refreshGraph().catch(()=>{});
+      } catch (e) {
+        $('bulk-result').innerHTML = `<span class="text-rose-300">bulk scan failed: ${esc(e.message)}</span>`;
+      } finally {
+        $('bulk-scan-btn').disabled = false;
+        $('bulk-scan-btn').textContent = '▶ Scan all';
+      }
+    }
+
+    // =========================================================================
+    // Monday Playbook (v3.0)
+    // =========================================================================
+    let currentPlaybook = null;
+    let playbookFilter = '7';
+
+    async function refreshPlaybook() {
+      const vendor = (lastScan && lastScan.vendor) || $('vendor-input').value.trim().toLowerCase();
+      if (!vendor) return;
+      try {
+        const p = await api(`/playbook/${encodeURIComponent(vendor)}`);
+        currentPlaybook = p;
+        $('playbook-empty').classList.add('hidden');
+        $('playbook-card').classList.remove('hidden');
+        $('playbook-savings').textContent = fmtINR(p.total_savings_inr);
+        renderPlaybookRows();
+      } catch (e) {
+        $('playbook-empty').classList.remove('hidden');
+        $('playbook-card').classList.add('hidden');
+        $('playbook-empty').innerHTML = `<div class="text-4xl mb-2">📋</div><div>${esc(e.message)}</div><div class="text-xs text-slate-500 mt-2">Scan a vendor first (Overview panel).</div>`;
+      }
+    }
+
+    function renderPlaybookRows() {
+      if (!currentPlaybook) return;
+      const items = currentPlaybook.items || [];
+      let rows = items;
+      if (playbookFilter === '7') rows = items.filter(i => i.sla_days <= 7);
+      else if (playbookFilter === '30') rows = items.filter(i => i.sla_days > 7 && i.sla_days <= 30);
+      else if (playbookFilter === 'long') rows = items.filter(i => i.sla_days > 30);
+      const el = $('playbook-rows');
+      if (!rows.length) {
+        el.innerHTML = `<div class="text-sm text-slate-500 italic">Nothing in this horizon — portfolio is clean for ${esc(currentPlaybook.vendor)}.</div>`;
+        return;
+      }
+      el.innerHTML = rows.map((r, i) => {
+        const cx = r.crosswalk || {};
+        const cxTags = [
+          ...(cx.iso27001 || []).map(c => `<span class="chip mono" style="color:#60a5fa;border-color:rgba(96,165,250,0.35);background:rgba(96,165,250,0.08)">ISO · ${esc(c)}</span>`),
+          ...(cx.soc2 || []).map(c => `<span class="chip mono" style="color:#a855f7;border-color:rgba(168,85,247,0.35);background:rgba(168,85,247,0.08)">SOC2 · ${esc(c)}</span>`),
+          ...(cx.nist_csf || []).map(c => `<span class="chip mono" style="color:#34d399;border-color:rgba(52,211,153,0.35);background:rgba(52,211,153,0.08)">NIST · ${esc(c)}</span>`),
+        ].join(' ');
+        return `
+          <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div class="flex-1 min-w-[240px]">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="chip mono" style="color:#fcd34d;border-color:rgba(245,158,11,0.35);background:rgba(245,158,11,0.08)">${esc(r.clause)}</span>
+                  <span class="chip mono">${esc(r.owner)}</span>
+                  <span class="chip mono" style="color:${r.sla_days <=7 ? '#fda4af' : r.sla_days<=30 ? '#fcd34d':'#cbd5e1'}">SLA ${r.sla_days}d</span>
+                </div>
+                <div class="text-sm font-semibold mt-2">${i+1}. ${esc(r.task)}</div>
+                <div class="text-xs text-slate-400 mt-1">${esc(r.obligation || '')}</div>
+              </div>
+              <div class="text-right">
+                <div class="text-[10px] uppercase tracking-wider text-emerald-300">saves</div>
+                <div class="text-xl font-bold mono text-emerald-300">${fmtINR(r.savings_inr_if_addressed)}</div>
+              </div>
+            </div>
+            ${r.rag_quote ? `<div class="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs">
+              <div class="text-[10px] uppercase tracking-wider text-amber-400 mono mb-1">${esc(r.rag_citation || 'DPDP Act 2023')}</div>
+              <div class="leading-relaxed">&ldquo;${esc(r.rag_quote)}&rdquo;</div>
+            </div>` : ''}
+            ${cxTags ? `<div class="mt-2 flex flex-wrap gap-1.5">${cxTags}</div>` : ''}
+          </div>`;
+      }).join('');
+    }
+
+    // =========================================================================
+    // Contract Intelligence (Layer 5 — v3.0)
+    // =========================================================================
+    const SAMPLE_DPA = `MASTER SERVICES AGREEMENT — DATA PROCESSING ADDENDUM
+This addendum governs the processing of personal data.
+
+1. Vendor will use best efforts to secure data.
+2. Vendor may store data in United States data centers for redundancy.
+3. Vendor will respond to data subject requests at additional cost to Controller.
+4. Vendor retains data indefinitely unless Controller requests deletion.
+5. Vendor shall notify Controller as soon as practicable of any incident.
+6. No audit rights are granted.
+7. This agreement is governed by the laws of California.`;
+
+    async function analyzeContract() {
+      const text = $('contract-input').value || '';
+      if (!text.trim()) { alert('Paste the contract text first.'); return; }
+      const btn = $('contract-analyze-btn');
+      btn.disabled = true; btn.textContent = 'Analyzing…';
+      try {
+        const r = await api('/contract/analyze', { method:'POST', body: JSON.stringify({ contract_text: text }) });
+        $('contract-summary').classList.remove('hidden');
+        $('contract-coverage').textContent = r.coverage_pct + '%';
+        $('contract-coverage').style.color = r.coverage_pct >= 80 ? '#10b981' : r.coverage_pct >= 50 ? '#f59e0b' : '#ef4444';
+        $('contract-red').textContent = r.red_count;
+        $('contract-amber').textContent = r.amber_count;
+        $('contract-green').textContent = r.green_count;
+        $('contract-penalty').textContent = fmtINR(r.potential_penalty_inr);
+        $('contract-narrative').textContent = r.summary || '';
+
+        const gaps = r.gaps || [];
+        $('contract-gaps').innerHTML = gaps.map(g => {
+          const col = g.status === 'green' ? '#10b981' : g.status === 'amber' ? '#f59e0b' : '#ef4444';
+          const label = g.status.toUpperCase();
+          const cx = g.crosswalk || {};
+          const cxTags = [
+            ...(cx.iso27001 || []).map(c => `<span class="chip mono" style="color:#60a5fa;border-color:rgba(96,165,250,0.35);background:rgba(96,165,250,0.08)">ISO · ${esc(c)}</span>`),
+            ...(cx.soc2 || []).map(c => `<span class="chip mono" style="color:#a855f7;border-color:rgba(168,85,247,0.35);background:rgba(168,85,247,0.08)">SOC2 · ${esc(c)}</span>`),
+            ...(cx.nist_csf || []).map(c => `<span class="chip mono" style="color:#34d399;border-color:rgba(52,211,153,0.35);background:rgba(52,211,153,0.08)">NIST · ${esc(c)}</span>`),
+          ].join(' ');
+          return `
+            <div class="rounded-xl border p-4" style="border-color:${col}55; background:${col}0d">
+              <div class="flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                  <span class="chip mono" style="color:${col};border-color:${col}55;background:${col}18">${label}</span>
+                  <span class="mono text-amber-300 ml-2">${esc(g.section)}</span>
+                  <span class="text-sm ml-2">${esc(g.label)}</span>
+                </div>
+                <div class="text-right">
+                  <div class="text-[10px] uppercase tracking-wider text-rose-300">max penalty</div>
+                  <div class="text-sm mono text-rose-300">${fmtINR(g.penalty_inr)}</div>
+                </div>
+              </div>
+              <div class="mt-2 text-xs text-slate-400">${esc(g.obligation || '')}</div>
+              ${g.evidence && g.evidence.length ? `<div class="mt-2"><div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Found in contract</div>${g.evidence.map(e => `<div class="mono text-[11px] text-emerald-300/80">…${esc(e)}…</div>`).join('')}</div>` : ''}
+              ${g.red_flags && g.red_flags.length ? `<div class="mt-2"><div class="text-[10px] uppercase tracking-wider text-rose-300 mb-1">Red flags</div>${g.red_flags.map(e => `<div class="mono text-[11px] text-rose-300">…${esc(e)}…</div>`).join('')}</div>` : ''}
+              ${g.rag_quote ? `<div class="mt-2 rounded border border-amber-500/30 bg-amber-500/5 p-2 text-xs">
+                <div class="text-[10px] uppercase tracking-wider text-amber-400 mono mb-1">${esc(g.rag_citation || 'DPDP Act 2023')}</div>
+                <div class="leading-relaxed">&ldquo;${esc(g.rag_quote)}&rdquo;</div>
+              </div>` : ''}
+              <details class="mt-2">
+                <summary class="text-[11px] text-amber-300 mono cursor-pointer"><span class="chev">▶</span> Recommended rewrite</summary>
+                <div class="mt-2 rounded bg-slate-950/80 border border-slate-800 p-3 text-xs leading-relaxed text-slate-200">${esc(g.recommended_rewrite)}</div>
+                <button class="btn-ghost mt-2 px-2 py-0.5 rounded text-[10px]" data-copy-rewrite='${encodeURIComponent(g.recommended_rewrite)}'>📋 Copy rewrite</button>
+              </details>
+              ${cxTags ? `<div class="mt-2 flex flex-wrap gap-1.5">${cxTags}</div>` : ''}
+            </div>`;
+        }).join('');
+
+        $$('#contract-gaps button[data-copy-rewrite]').forEach(b => b.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(decodeURIComponent(b.dataset.copyRewrite));
+            b.textContent = '✓ copied'; setTimeout(() => b.innerHTML = '📋 Copy rewrite', 1500);
+          } catch { b.textContent = 'copy failed'; }
+        }));
+      } catch (e) {
+        $('contract-narrative').textContent = 'analysis failed: ' + e.message;
+      } finally {
+        btn.disabled = false; btn.textContent = '▶ Analyze';
+      }
+    }
+
+    // =========================================================================
+    // Data Flow Map (v3.0)
+    // =========================================================================
+    async function refreshDataflow() {
+      try {
+        const g = await api('/graph');
+        const vendors = (g.nodes || []).filter(n => n.kind === 'vendor');
+        if (!vendors.length) {
+          $('dataflow-grid').innerHTML = `<div class="text-sm text-slate-500 italic">Scan vendors first.</div>`;
+          return;
+        }
+        const CATS = ['name','email','phone','pan','upi_id','account_number','address','dob','medical_history','order_history','ip','session_logs','company','prescriptions','insurance_id'];
+        const tagFor = (v) => {
+          const name = (v.label || '').toLowerCase();
+          if (name.includes('pay') || name.includes('trust')) return 'payments';
+          if (name.includes('shop') || name.includes('quick')) return 'ecommerce';
+          if (name.includes('health') || name.includes('buddy')) return 'healthtech';
+          if (name.includes('bridge') || name.includes('cloud')) return 'cloud';
+          if (name.includes('crm')) return 'crm';
+          return 'generic';
+        };
+        const piiByTag = {
+          payments:['name','pan','upi_id','account_number','phone','email','order_history'],
+          ecommerce:['name','email','phone','address','order_history'],
+          healthtech:['name','phone','dob','medical_history','prescriptions','insurance_id'],
+          cloud:['name','email','ip','session_logs'],
+          crm:['name','email','phone','company'],
+          generic:['name','email','phone'],
+        };
+        let html = `<table class="w-full text-xs mono">
+          <thead><tr>
+            <th class="text-left py-2 pr-2 text-slate-500 uppercase tracking-wider">Vendor</th>
+            ${CATS.map(c => `<th class="text-center py-2 px-1 text-slate-500 uppercase tracking-wider">${esc(c)}</th>`).join('')}
+          </tr></thead><tbody>`;
+        for (const v of vendors) {
+          const tag = tagFor(v);
+          const covers = new Set(piiByTag[tag] || []);
+          const bandCol = v.band === 'safe' ? '#10b981' : v.band === 'block' ? '#ef4444' : '#f59e0b';
+          html += `<tr class="border-t border-slate-800">
+            <td class="py-2 pr-2"><span style="color:${bandCol}">●</span> <span class="text-slate-200">${esc(v.label)}</span> <span class="text-slate-500">(${esc(tag)})</span></td>`;
+          for (const c of CATS) {
+            if (covers.has(c)) {
+              html += `<td class="text-center py-2 px-1"><span class="inline-block w-4 h-4 rounded" style="background:${bandCol}" title="${esc(v.label)} touches ${esc(c)}"></span></td>`;
+            } else {
+              html += `<td class="text-center py-2 px-1"><span class="inline-block w-4 h-4 rounded border border-slate-800"></span></td>`;
+            }
+          }
+          html += `</tr>`;
+        }
+        html += `</tbody></table>`;
+        html += `<div class="mt-3 text-[11px] text-slate-500">Filled = vendor touches that PII category. Tile color matches the vendor's trust band. Use this grid to write your §5 DPDP privacy notice.</div>`;
+        $('dataflow-grid').innerHTML = html;
+      } catch (e) {
+        $('dataflow-grid').innerHTML = `<div class="text-sm text-rose-300">data flow failed: ${esc(e.message)}</div>`;
+      }
+    }
+
+    // =========================================================================
+    // Ask DPDP drawer (v3.0)
+    // =========================================================================
+    function toggleDrawer(force) {
+      const d = $('ask-drawer');
+      const open = force == null ? d.classList.contains('translate-x-full') : force;
+      if (open) {
+        d.classList.remove('translate-x-full');
+        setTimeout(() => $('drawer-q').focus(), 100);
+      } else {
+        d.classList.add('translate-x-full');
+      }
+    }
+    async function drawerAsk(q) {
+      const query = (q != null ? q : $('drawer-q').value).trim();
+      if (!query) return;
+      $('drawer-q').value = query;
+      $('drawer-answer').textContent = 'thinking…';
+      $('drawer-cites').innerHTML = '';
+      try {
+        const r = await api('/rag/ask', { method:'POST', body: JSON.stringify({ query }) });
+        $('drawer-answer').textContent = r.answer || '(no answer)';
+        const cites = r.citations || [];
+        $('drawer-cites').innerHTML = cites.slice(0, 3).map(c => `
+          <div class="rounded border border-amber-500/30 bg-amber-500/5 p-2">
+            <div class="text-[10px] uppercase tracking-wider text-amber-400 mono mb-1">${esc(c.section)} · p.${esc(c.page || '?')}</div>
+            <div class="text-slate-200 leading-relaxed">&ldquo;${esc(c.excerpt || '')}&rdquo;</div>
+          </div>
+        `).join('');
+      } catch (e) {
+        $('drawer-answer').textContent = 'ask failed: ' + e.message;
+      }
+    }
+
+    // =========================================================================
+    // Demo mode (v3.0 — 7-step narrated pitch)
     // =========================================================================
     let demoRunning = false;
 
@@ -1418,14 +1812,21 @@ Cite: ${m.rag_citation || ''}`;
       const badge = $('demo-badge');
       badge.classList.remove('hidden');
       try {
-        // 1. Overview + scan paytrust
+        // 1. Executive board — the CISO one-screen
+        navTo('executive');
+        $('bulk-input').value = 'paytrust-partner.com\nshopquick-vendor.com\nhealthbuddy-partner.com';
+        await sleep(600);
+        await runBulkScan();
+        await sleep(1800);
+
+        // 2. Drill into paytrust via Overview
         $('vendor-input').value = 'paytrust-partner.com';
         navTo('overview');
-        await sleep(250);
-        await doScan();                         // uses real /scan
-        await sleep(2000);
+        await sleep(400);
+        await doScan();
+        await sleep(1800);
 
-        // 2. DPDP panel — highlight §8(5)
+        // 3. DPDP Exposure — highlight §8(5)
         navTo('dpdp');
         await sleep(800);
         const row = $$('#dpdp-list details').find(d => (d.dataset.clause || '').includes('8(5)'));
@@ -1434,25 +1835,37 @@ Cite: ${m.rag_citation || ''}`;
           row.classList.add('row-pulse');
           setTimeout(() => row.classList.remove('row-pulse'), 2200);
         }
-        await sleep(3000);
+        await sleep(2800);
 
-        // 3. Gateway panel — activate + simulate
+        // 4. Monday Playbook — remediation checklist
+        navTo('playbook');
+        await sleep(1800);
+
+        // 5. Contract Intelligence — paste weak DPA, analyze
+        navTo('contract');
+        $('contract-input').value = SAMPLE_DPA;
+        await sleep(800);
+        await analyzeContract();
+        await sleep(2500);
+
+        // 6. Gateway — activate + simulate breach
         navTo('gateway');
         await sleep(700);
         await activateGateway();
-        await sleep(1000);
+        await sleep(900);
         await simulateAttack();
-        await sleep(5000);
+        await sleep(4500);
 
-        // 4. Ask DPDP
-        navTo('ask');
-        await sleep(600);
-        await askDpdp('What are the penalties under Section 8(5)?');
-        await sleep(3500);
+        // 7. Ask DPDP drawer — live RAG citation
+        toggleDrawer(true);
+        await sleep(400);
+        await drawerAsk('What are the penalties under Section 8(5)?');
+        await sleep(3000);
+        toggleDrawer(false);
 
-        // 5. Done — show graph
-        navTo('graph');
-        await sleep(1500);
+        // Land on Executive Board for the ₹ savings ticker reveal
+        navTo('executive');
+        await refreshPortfolio();
         $('gw-status').innerHTML += ` <span class="text-amber-300">· demo complete · try it yourself</span>`;
       } finally {
         badge.classList.add('hidden');
@@ -1486,10 +1899,42 @@ Cite: ${m.rag_citation || ''}`;
       $$('#rag-chips button').forEach(b => b.addEventListener('click', () => askDpdp(b.dataset.q)));
 
       $('demo-btn').addEventListener('click', runDemo);
+
+      // v3.0 wiring — portfolio, playbook, contract, dataflow, drawer
+      $('portfolio-refresh').addEventListener('click', () => refreshPortfolio());
+      $('bulk-scan-btn').addEventListener('click', runBulkScan);
+
+      $('playbook-refresh').addEventListener('click', () => refreshPlaybook());
+      $$('#playbook-tabs button').forEach(b => b.addEventListener('click', () => {
+        $$('#playbook-tabs button').forEach(x => x.classList.toggle('active', x === b));
+        playbookFilter = b.dataset.pb;
+        renderPlaybookRows();
+      }));
+
+      $('contract-analyze-btn').addEventListener('click', analyzeContract);
+      $('contract-sample-btn').addEventListener('click', () => { $('contract-input').value = SAMPLE_DPA; });
+
+      $('dataflow-refresh').addEventListener('click', () => refreshDataflow());
+
+      $('ask-open').addEventListener('click', () => toggleDrawer(true));
+      $('ask-close').addEventListener('click', () => toggleDrawer(false));
+      $('drawer-ask').addEventListener('click', () => drawerAsk());
+      $('drawer-q').addEventListener('keydown', (e) => { if (e.key === 'Enter') drawerAsk(); });
+
       window.addEventListener('keydown', (e) => {
         if (e.ctrlKey && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
           e.preventDefault();
           runDemo();
+        }
+        // '/' toggles Ask DPDP drawer — unless focused in an input/textarea
+        const tag = (document.activeElement && document.activeElement.tagName) || '';
+        const typing = tag === 'INPUT' || tag === 'TEXTAREA';
+        if (e.key === '/' && !typing) {
+          e.preventDefault();
+          toggleDrawer();
+        }
+        if (e.key === 'Escape') {
+          toggleDrawer(false);
         }
       });
     }
@@ -1499,11 +1944,15 @@ Cite: ${m.rag_citation || ''}`;
     // =========================================================================
     (async function init() {
       renderSidebar();
-      navTo('overview');
+      navTo('executive');
       wireEvents();
       await pingStatus();
       startSSE();
       refreshGraph().catch(() => {});
+      refreshPortfolio().catch(() => {});
+      refreshKPIChips().catch(() => {});
+      // lightweight KPI chip polling for the header ticker
+      setInterval(() => refreshKPIChips().catch(() => {}), 15000);
     })();
   </script>
 </body>
