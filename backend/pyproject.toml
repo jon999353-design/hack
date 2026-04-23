@@ -1,0 +1,45 @@
+[project]
+name = "vendorguard-ai"
+version = "2.1.0"
+description = "VendorGuard AI — Vendor Access Control Plane for DPDP Act 2023 compliance."
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.30.0",
+  "httpx>=0.27.0",
+  "pydantic>=2.8.0",
+  "pydantic-settings>=2.4.0",
+  "python-dotenv>=1.0.1",
+  "dnspython>=2.6.1",
+  "cryptography>=43.0.0",
+  "anthropic>=0.34.0",
+  "openai>=1.40.0",
+  "twilio>=9.0.0",
+  "aiosqlite>=0.20.0",
+  "rich>=13.7.0",
+  "python-multipart>=0.0.9",
+  "scikit-learn>=1.5.0",
+  "numpy>=1.26.0",
+  "reportlab>=4.2.0",
+  "sse-starlette>=2.1.0",
+  "pypdf>=4.3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0",
+  "pytest-asyncio>=0.23.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]

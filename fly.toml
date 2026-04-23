@@ -1,0 +1,45 @@
+# Fly.io deployment config for VendorGuard AI backend.
+# Usage:
+#   flyctl launch --copy-config --no-deploy    # first time only
+#   flyctl secrets set ANTHROPIC_API_KEY=... SHODAN_API_KEY=... ...
+#   flyctl deploy
+app = "vendorguard-api"
+primary_region = "bom"   # Mumbai — lowest latency for Indian judges
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  APP_HOST = "0.0.0.0"
+  APP_PORT = "8080"
+  DEMO_MODE = "true"
+  AI_PROVIDER = "anthropic"
+  SQLITE_PATH = "/data/vendorguard.db"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_start_machines = true
+  auto_stop_machines = true
+  # Set to 1 on demo day to kill the first-request cold start.
+  min_machines_running = 0
+  processes = ["app"]
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/health"
+
+[[mounts]]
+  source = "vg_data"
+  destination = "/data"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256
+
+[processes]
+  app = "uvicorn app.main:app --host 0.0.0.0 --port 8080"

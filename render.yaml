@@ -1,0 +1,44 @@
+# VendorGuard AI — Render.com deployment config.
+#
+# 1. Push this repo to GitHub.
+# 2. On render.com → New → Blueprint → connect this repo → apply.
+# 3. Add the `sync: false` secrets in the Render dashboard (they are optional —
+#    every single one falls back to mock data when missing).
+# 4. Point the Vercel frontend at the resulting URL via ?api=https://…
+#    or by editing frontend/config.js before deploy.
+services:
+  - type: web
+    name: vendorguard-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: DEMO_MODE
+        value: "true"
+      - key: AI_PROVIDER
+        value: anthropic
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: SHODAN_API_KEY
+        sync: false
+      - key: HIBP_API_KEY
+        sync: false
+      - key: VIRUSTOTAL_API_KEY
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_WHATSAPP_FROM
+        sync: false
+      - key: ALERT_WHATSAPP_TO
+        sync: false
+      - key: SQLITE_PATH
+        value: /tmp/vendorguard.db
