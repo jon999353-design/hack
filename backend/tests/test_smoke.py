@@ -116,6 +116,28 @@ def test_rag_ask(client):
     assert any("8(6)" in c["section"] or "breach" in c["excerpt"].lower() for c in body["citations"])
 
 
+def test_rag_ask_boosts_explicit_section_reference(client):
+    """When the query names a clause (§8(5), Section 18, Rule 6...), that
+    clause should be the top citation — not a distant passage that happens
+    to share a keyword like 'penalty' or 'breach'."""
+    cases = [
+        ("What are the penalties under Section 8(5)?", "§8(5)"),
+        ("When must a breach be reported under §8(6)?", "§8(6)"),
+        ("Tell me about Section 18", "§18"),
+        ("What does Rule 6 require?", "R.6"),
+    ]
+    for query, expected_prefix in cases:
+        r = client.post("/rag/ask", json={"query": query})
+        assert r.status_code == 200, query
+        cites = r.json()["citations"]
+        assert cites, f"no citations for {query!r}"
+        top_tag = (cites[0]["section"] or "").split(" ", 1)[0]
+        assert top_tag == expected_prefix, (
+            f"query {query!r} expected top section {expected_prefix!r}, "
+            f"got {cites[0]['section']!r}"
+        )
+
+
 def test_canary_mint_and_trip(client):
     v = "paytrust-partner.com"
     r = client.post("/canary/mint", json={"vendor": v, "endpoint": "reporting/export-legacy"})

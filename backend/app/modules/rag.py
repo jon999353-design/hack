@@ -16,6 +16,7 @@ the answer; the quote + citation come from retrieval, not from the model.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -24,6 +25,43 @@ from sklearn.metrics.pairwise import cosine_similarity
 from app.config import settings
 
 _DATA = Path(__file__).parent.parent / "data" / "dpdp_act_excerpts.json"
+
+# Matches "§8(5)", "S.8(5)", "Sec 8(5)", "Section 8(5)", "Rule 6", "R.6",
+# "schedule 2", etc. — covers the most common ways a judge or auditor will
+# reference a DPDP clause. Used to bias TF-IDF retrieval toward exact clauses.
+_SECTION_PATTERNS = [
+    re.compile(r"\u00a7\s*(\d+(?:\(\d+\))?)", re.IGNORECASE),
+    re.compile(r"\bsection\s+(\d+(?:\(\d+\))?)", re.IGNORECASE),
+    re.compile(r"\bsec\.?\s+(\d+(?:\(\d+\))?)", re.IGNORECASE),
+    re.compile(r"\bs\.?\s*(\d+\(\d+\))", re.IGNORECASE),
+    re.compile(r"\brule\s+(\d+)", re.IGNORECASE),
+    re.compile(r"\br\.?\s*(\d+)\b", re.IGNORECASE),
+    re.compile(r"\bschedule\s+(\d+)", re.IGNORECASE),
+]
+
+
+def _extract_clause_refs(query: str) -> list[str]:
+    """Return clause labels referenced in the query, normalised to the form
+    used in `dpdp_act_excerpts.json` (e.g. '§8(5)', 'R.6', 'Schedule 2')."""
+    refs: list[str] = []
+    for pat in _SECTION_PATTERNS:
+        for m in pat.finditer(query):
+            tag = (m.group(0) or "").lower()
+            num = m.group(1)
+            if tag.startswith("rule") or tag.startswith("r."):
+                refs.append(f"R.{num}")
+            elif tag.startswith("schedule"):
+                refs.append(f"Schedule {num}")
+            else:
+                refs.append(f"\u00a7{num}")
+    # Dedupe preserving order.
+    seen: set[str] = set()
+    out: list[str] = []
+    for r in refs:
+        if r not in seen:
+            seen.add(r)
+            out.append(r)
+    return out
 
 
 class DPDPRetriever:
@@ -67,7 +105,34 @@ class DPDPRetriever:
         if not query.strip():
             return []
         q = self._vec.transform([query])
-        sims = cosine_similarity(q, self._mat)[0]
+        sims = cosine_similarity(q, self._mat)[0].astype(float).copy()
+
+        # If the query references specific clauses ("§8(5)", "Section 18",
+        # "Rule 6", ...), strongly boost passages whose `section` label starts
+        # with that token. This is what judges and auditors actually type, and
+        # pure word-overlap TF-IDF drifts to unrelated passages that happen to
+        # share a common word like "penalty" or "breach". The boost is added
+        # (not replaced) so semantic matching still works when no clause is
+        # explicitly named.
+        clause_refs = _extract_clause_refs(query)
+        if clause_refs:
+            for i, p in enumerate(self._passages):
+                sec = (p.get("section") or "").strip()
+                if not sec:
+                    continue
+                # Normalise section label for comparison — sections can look
+                # like "R.6 (DPDP Rules 2025)" or "§8(5)"; split on first space
+                # to isolate the canonical tag.
+                sec_tag = sec.split(" ", 1)[0]
+                for ref in clause_refs:
+                    if sec_tag == ref or sec == ref:
+                        sims[i] += 1.0  # dominant hit: exact clause match
+                        break
+                    if ref.startswith("\u00a7") and sec_tag.startswith(
+                        ref.split("(")[0]
+                    ):
+                        sims[i] += 0.4  # parent section match (e.g. §8 → §8(5))
+
         top = sims.argsort()[::-1][:k]
         out = []
         for idx in top:

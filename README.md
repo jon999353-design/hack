@@ -84,7 +84,7 @@ L5  Contract Intel   17 rules · evidence trace (keyword+offset+snippet+conf)
 - **ProjectDiscovery `nuclei`** — wired in as a subprocess with 8,000+ CVE templates. Absent binary → graceful mock fallback (ships with realistic nuclei CVE findings so the demo is rock-solid offline).
 - **SQLite persistence** via `aiosqlite` — scans, gateway state, alerts, canary tokens all survive restarts.
 - **Board-ready PDF report** — `GET /report/{vendor}.pdf` renders a ReportLab CISO deck with trust score, findings, and DPDP obligations quoted from the Act.
-- **DPDP Act RAG** — TF-IDF retriever over 14 verbatim gazette passages. Every DPDP mapping carries `rag_quote` + `rag_citation`. Drop the real Act PDF into `.env` and it re-indexes on boot.
+- **DPDP Act RAG** — TF-IDF retriever over 49 verbatim passages (Act §§2-34 + DPDP Rules 2025 R.1-R.22 + CERT-In 6h directions). Every DPDP mapping carries `rag_quote` + `rag_citation`. Drop the real Act PDF into `.env` and it re-indexes on boot.
 - **Live dashboard** — `GET /alerts/stream` is an SSE endpoint; the frontend `EventSource` subscribes and renders alerts in real time.
 - **Vendor-relationship graph** — `GET /graph` + Cytoscape.js view of your company in the centre, vendors on the rim, edges coloured by band.
 - **Canary tokens** — mint tripwire endpoints for a vendor, trip them, see a critical alert fire. Absorbs the honeypot angle any competitor might pitch.
