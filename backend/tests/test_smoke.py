@@ -27,7 +27,7 @@ def test_root(client):
     assert r.status_code == 200
     body = r.json()
     assert body["name"] == "VendorGuard AI"
-    assert body["version"].startswith("2.")
+    assert body["version"].startswith(("2.", "3."))
     assert "behavioural_ml" in body["engines"]
     assert body["engines"]["behavioural_ml"]["model"] == "IsolationForest"
 
@@ -160,3 +160,107 @@ def test_canary_list(client):
     r = client.get(f"/canary?vendor={v}")
     assert r.status_code == 200
     assert len(r.json()) >= 1
+
+
+# -------------------------------------------------------------- v3.0 upgrades
+def test_framework_crosswalk(client):
+    r = client.get("/framework/crosswalk")
+    assert r.status_code == 200
+    body = r.json()
+    assert "iso27001" in body["frameworks"]
+    assert body["crosswalk"]["§8(5)"]["iso27001"]
+
+
+def test_contract_intel_flags_missing_clauses(client):
+    weak = (
+        "This agreement covers vendor services. Vendor will use best efforts to secure data. "
+        "Vendor may store data in United States data centers."
+    )
+    r = client.post("/contract/analyze", json={"contract_text": weak})
+    assert r.status_code == 200
+    body = r.json()
+    # At least breach notification and cross-border and audit should be missing or flagged
+    statuses = {g["section"]: g["status"] for g in body["gaps"]}
+    assert statuses.get("§8(6)") == "red"
+    assert statuses.get("§16") in ("red", "amber")
+    assert body["potential_penalty_inr"] > 0
+    assert body["coverage_pct"] < 100
+    assert any(g["rag_quote"] for g in body["gaps"])
+
+
+def test_contract_intel_detects_good_clauses(client):
+    good = (
+        "Processor shall Process Personal Data only for the purposes of the Services. "
+        "Processor shall implement reasonable security safeguards, including encryption "
+        "at rest and encryption in transit. Processor shall notify Controller within 24 hours "
+        "of any personal data breach. Data will be deleted within 30 days of termination; "
+        "retention period is strictly limited. All personal data shall reside in India. "
+        "Data subject rights will be supported. Lawful basis and consent of the data principal "
+        "will be ensured. A grievance officer and data protection officer are appointed. "
+        "Processor grants audit rights to Controller."
+    )
+    r = client.post("/contract/analyze", json={"contract_text": good})
+    body = r.json()
+    assert body["coverage_pct"] >= 50
+
+
+def test_playbook_endpoint(client):
+    r = client.get("/playbook/paytrust-partner.com")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["vendor"] == "paytrust-partner.com"
+    assert body["total_items"] >= 1
+    assert body["total_savings_inr"] > 0
+    # Every item carries a crosswalk
+    assert all("crosswalk" in it for it in body["items"])
+
+
+def test_portfolio_endpoint(client):
+    r = client.get("/portfolio")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["vendors_tracked"] >= 1
+    assert "framework_coverage" in body
+    assert body["framework_coverage"]["catalog"]["iso27001"]
+
+
+def test_kpis_endpoint(client):
+    r = client.get("/kpis")
+    assert r.status_code == 200
+    body = r.json()
+    assert "attacks_blocked" in body
+    assert "savings_inr" in body
+
+
+def test_bulk_vendor_scan(client):
+    r = client.post("/vendors/bulk", json={"vendors": [
+        "paytrust-partner.com", "shopquick-vendor.com"
+    ]})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["count"] == 2
+    assert all("vendor" in item for item in body["results"])
+
+
+def test_incident_pdf_for_recent_alert(client):
+    # Make sure we have an alert: reset gateway, activate, trigger a block
+    v = "paytrust-partner.com"
+    client.post(f"/gateway/reset/{v}")
+    client.post("/gateway/activate", json={
+        "vendor": v, "scope": ["reporting"], "max_records_per_request": 500,
+    })
+    resp = client.post("/gateway/proxy", json={
+        "vendor": v, "endpoint": "reporting/export", "records_requested": 15000,
+        "client_ip": "203.0.113.44",
+    }).json()
+    alert_id = resp["event"]["id"]
+    r = client.get(f"/incident/{alert_id}.pdf")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/pdf"
+    assert r.content[:5] == b"%PDF-"
+
+
+def test_scan_response_includes_crosswalk(client):
+    r = client.post("/scan", json={"vendor": "paytrust-partner.com"})
+    body = r.json()
+    assert any(m.get("crosswalk", {}).get("iso27001") for m in body["dpdp"])

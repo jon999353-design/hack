@@ -71,6 +71,7 @@ _RULES: list[dict[str, Any]] = [
             r"reasonable time",
             r"without undue delay(?!.*\d)",
         ],
+        "missing_is_red": True,  # no breach-notification clause = outright §8(6) violation
         "rewrite": (
             "Processor shall notify Controller in writing without undue delay "
             "and in no event later than twenty-four (24) hours of becoming "
@@ -286,12 +287,12 @@ def _find_red_flags(text: str, patterns: list[str]) -> list[str]:
     return out
 
 
-def _status_for(evidence: list[str], red_flags: list[str]) -> str:
+def _status_for(evidence: list[str], red_flags: list[str], missing_is_red: bool = False) -> str:
     if red_flags:
         return "red"
     if evidence:
         return "green"
-    return "amber"
+    return "red" if missing_is_red else "amber"
 
 
 def _penalty_for(section: str) -> int:
@@ -316,7 +317,7 @@ def analyze(text: str) -> dict[str, Any]:
         section = rule["section"]
         evidence = _find_evidence(text, rule["evidence_keywords"])
         red_flags = _find_red_flags(text, rule["red_flags"])
-        status = _status_for(evidence, red_flags)
+        status = _status_for(evidence, red_flags, bool(rule.get("missing_is_red")))
 
         base_section = section.split("-")[0]
         hit = r.lookup_clause(base_section)
