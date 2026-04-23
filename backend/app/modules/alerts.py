@@ -5,7 +5,7 @@ from __future__ import annotations
 from rich.console import Console
 
 from app.config import settings
-from app.modules import events, store
+from app.modules import events, store, webhook
 from app.schemas import AlertEvent
 
 console = Console()
@@ -33,8 +33,11 @@ async def dispatch(event: AlertEvent) -> dict:
     await store.save_alert(event.model_dump())
     events.publish("alerts", event.model_dump())
 
+    # Fire generic webhook (Slack/Teams/Zapier) if configured — best-effort.
+    webhook_result = await webhook.fire(event)
+
     if not (settings.has_twilio and settings.alert_whatsapp_to):
-        return {"channel": "console", "status": "logged", "body": body}
+        return {"channel": "console", "status": "logged", "body": body, "webhook": webhook_result}
 
     try:
         from twilio.rest import Client
@@ -45,7 +48,7 @@ async def dispatch(event: AlertEvent) -> dict:
             to=settings.alert_whatsapp_to,
             body=body,
         )
-        return {"channel": "whatsapp", "status": "sent", "sid": msg.sid}
+        return {"channel": "whatsapp", "status": "sent", "sid": msg.sid, "webhook": webhook_result}
     except Exception as e:
         console.print(f"[yellow]Twilio send failed, falling back to console: {e}")
-        return {"channel": "console", "status": "fallback", "error": str(e), "body": body}
+        return {"channel": "console", "status": "fallback", "error": str(e), "body": body, "webhook": webhook_result}
