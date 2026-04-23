@@ -1,15 +1,50 @@
-# VendorGuard AI  &nbsp;·&nbsp; v3.0
+# VendorGuard AI  &nbsp;·&nbsp; v3.1
 
 > **The Vendor Access Control Plane for DPDP-compliant India.**
-> Scan → Score → DPDP-map → Gateway-protect → **Fix the contract** — every finding grounded in the DPDP Act and crosswalked to ISO 27001 / SOC 2 / NIST CSF.
+> Scan → Score → DPDP-map → Gateway-protect → **Fix the contract** — every finding grounded in the DPDP Act (§-numbered, gazette-page cited, ₹-penalty mapped) and crosswalked to ISO 27001 / SOC 2 / NIST CSF.
 
-![status](https://img.shields.io/badge/status-hackathon%20ready-success) ![stack](https://img.shields.io/badge/stack-FastAPI%20%2B%20Tailwind-blue) ![ml](https://img.shields.io/badge/ML-IsolationForest-6366f1) ![nuclei](https://img.shields.io/badge/scanner-ProjectDiscovery%20nuclei-ef4444) ![rag](https://img.shields.io/badge/DPDP-RAG%20over%20Gazette-f59e0b) ![pdf](https://img.shields.io/badge/report-ReportLab%20PDF-0f766e) ![sse](https://img.shields.io/badge/live-SSE%20alerts-0ea5e9) ![license](https://img.shields.io/badge/license-MIT-green)
+![status](https://img.shields.io/badge/status-hackathon%20ready-success) ![stack](https://img.shields.io/badge/stack-FastAPI%20%2B%20Tailwind-blue) ![ml](https://img.shields.io/badge/ML-IsolationForest-6366f1) ![rules](https://img.shields.io/badge/rules-17%20DPDP%20contract%20rules-f59e0b) ![rag](https://img.shields.io/badge/RAG-49%20passages-f59e0b) ![osint](https://img.shields.io/badge/OSINT-crt.sh%20live-10b981) ![license](https://img.shields.io/badge/license-MIT-green)
 
-Built for **Athernex** (DSCE × BMSCE) by Team Rashi Innovators.
+Built for **Athernex 2026** (DSCE × BMSCE) by Team Rashi Innovators.
+
+> For the pitch script + judge Q&A cheat sheet → see [`PITCH.md`](./PITCH.md).
+> For the competitive landscape (OneTrust / Securiti / BigID / Tsaaro) → see [`COMPETITIVE.md`](./COMPETITIVE.md).
 
 ---
 
-## What's new in v3.0
+## 5-layer architecture
+
+```
+L1  OSINT            Shodan · HIBP · crt.sh (live) · VT · DNS · TLS · nuclei
+           │
+           ▼
+L2  Trust score      0-100 weighted composite · band (safe / watch / block)
+           │
+           ▼
+L3  DPDP mapping     20 clauses · ₹ penalty · RAG citation (49-passage corpus)
+                     + ISO 27001 / SOC 2 / NIST CSF crosswalk
+           │
+           ▼
+L4  Runtime gateway  IsolationForest + deterministic rules · <100ms containment
+                     · canary tripwires · webhook dispatch
+           │
+           ▼
+L5  Contract Intel   17 rules · evidence trace (keyword+offset+snippet+conf)
+                     · red/amber/green verdict · Act quote · rewrite
+```
+
+## What's new in v3.1
+
+- **Nav consolidation** — 13-item sidebar → **5 top-level panels** (Executive Board / Vendor Scan / Contract Intel / Live Defense / Remediation). Ask DPDP stays as the floating drawer (`/` hotkey). Sub-tabs handle depth. Built for a 90-second pitch arc.
+- **Contract Intel v2** — 12 rules → **17 rules**. New: §9 children (verifiable parental consent, no profiling), §17 exemption over-claim, §8(3) accuracy, §8(5) log retention (Rule 6), §10 SDF uplift. Every verdict now carries a **confidence score** (0.55-0.99), **evidence trace** (keyword+offset+snippet), and **red_flags_trace**.
+- **Benchmark Evidence Ledger** — 3 hand-written canned DPAs (strong / ambiguous / weak) with baked-in expected verdicts. One-click auto-load + auto-analyse. Reproducible audit harness (`GET /benchmark/dpas`, `GET /benchmark/dpas/{id}`). None of the commercial incumbents expose an equivalent.
+- **Live OSINT via crt.sh** — real Certificate Transparency subdomain enumeration (`GET /osint/live/{vendor}`) with a `verify_url` judges can open in crt.sh themselves. No API key required. Integrations banner now honestly reports `crt_sh / dns / tls` as live.
+- **RAG corpus 14 → 49 passages** — full DPDP Act 2023 §§2-34 + **DPDP Rules 2025 R.1-R.22** + Schedules + CERT-In directions. §8(5) now retrieves §8(5), not §5.
+- **Compliance Diff** — `GET /scan/{v}/diff?from=<scan_id>&to=<scan_id>`. Set-arithmetic delta between two historical scans: new findings, resolved findings, clause delta, score delta, ₹ exposure delta. Plus `GET /scan/{v}/history`.
+- **Honest copy** — "AI-drafted" → "LLM polish (Claude / GPT, optional) · grounded in DPDP RAG" where the LLM actually runs. Header tagline is now **"Rules · ML · RAG · DPDP Rules 2025"** — no AI-washing.
+- **27/27 tests** passing (was 23/23 in v3.0).
+
+## What was in v3.0
 
 - **Layer 5 — Contract Intelligence** (`POST /contract/analyze`). Paste a vendor DPA; get per-clause red/amber/green, ₹ penalty, recommended rewrite, and DPDP Act gazette quote. 12 rules cover §4, §5, §6, §7, §8(4–8), §10, §11, §16. Optional `polish_rewrites=true` calls Claude/GPT/OpenRouter to soften the template language.
 - **Executive Board** (`GET /portfolio`). Cross-vendor KPIs: vendors tracked, avg trust score, total ₹ exposure, attacks blocked, ₹ saved; band histogram; worst-offender leaderboard; top DPDP clauses triggered; ISO 27001 / SOC 2 / NIST CSF crosswalk chips — all in one screen.
