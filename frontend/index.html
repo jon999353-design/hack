@@ -51,6 +51,15 @@
     .panel { display: none; }
     .panel.active { display: block; }
 
+    /* v3.1 sub-tabs */
+    #sub-tabs { display: flex; }
+    #sub-tabs.hidden { display: none; }
+    .sub-tab { color: #94a3b8; transition: all 140ms ease; background: rgba(15,23,42,0.4); }
+    .sub-tab:hover { background: rgba(245,158,11,0.08); }
+    .sub-tab.sub-tab-active {
+      color: #fde68a; border-color: #f59e0b; background: rgba(245,158,11,0.15);
+    }
+
     /* cytoscape container */
     #graph { width: 100%; height: 500px; }
 
@@ -129,7 +138,7 @@
         <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 grid place-items-center text-slate-900 font-black">V</div>
         <div class="leading-tight">
           <div class="text-sm font-bold tracking-tight">VendorGuard <span class="text-amber-400">AI</span></div>
-          <div class="text-[10px] text-slate-400 mono">DPDP vendor control plane</div>
+          <div class="text-[10px] text-slate-400 mono">Rules · ML · RAG · DPDP Rules 2025</div>
         </div>
       </div>
 
@@ -149,9 +158,10 @@
         <span id="ml-chip" class="chip mono hidden">ml: …</span>
         <span id="nuclei-chip" class="chip mono hidden">nuclei: …</span>
         <span id="rag-chip" class="chip mono hidden">rag: …</span>
+        <span id="selftest-chip" class="chip mono hidden clickable" title="Click to re-run rule engine self-test against benchmark DPAs">selftest: …</span>
         <span id="kpi-savings-chip" class="chip mono hidden" style="color:#fca5a5; border-color:rgba(244,63,94,0.4); background:rgba(244,63,94,0.08)" title="₹ DPDP exposure avoided via gateway blocks">₹ saved: …</span>
         <span id="kpi-blocks-chip" class="chip mono hidden" style="color:#fcd34d; border-color:rgba(245,158,11,0.4); background:rgba(245,158,11,0.08)" title="Attacks auto-contained">blocks: …</span>
-        <span class="chip mono" style="color:#6ee7b7; border-color:rgba(16,185,129,0.4); background:rgba(16,185,129,0.08)">v3.0.0</span>
+        <span class="chip mono" style="color:#6ee7b7; border-color:rgba(16,185,129,0.4); background:rgba(16,185,129,0.08)">v3.2.1</span>
       </div>
 
       <!-- Demo mode button + badge -->
@@ -189,12 +199,15 @@
     <!-- =================== MAIN =================== -->
     <main class="flex-1 min-w-0 p-6">
 
+      <!-- Sub-tabs bar for grouped nav panels (v3.1) -->
+      <div id="sub-tabs" class="hidden flex flex-wrap items-center gap-2 mb-5"></div>
+
       <!-- ====== OVERVIEW PANEL ====== -->
       <section data-panel="overview" class="panel active space-y-6">
         <div class="flex items-start justify-between flex-wrap gap-3">
           <div>
             <h1 class="text-2xl font-bold tracking-tight">Trust Overview</h1>
-            <p class="text-sm text-slate-400">Weighted trust score 0–100, AI-drafted board summary, and scan provenance.</p>
+            <p class="text-sm text-slate-400">Weighted trust score 0–100, LLM-drafted board summary (Claude/GPT, optional), and scan provenance.</p>
           </div>
           <div id="scan-meta" class="text-[11px] mono text-slate-500"></div>
         </div>
@@ -236,8 +249,8 @@
           <!-- AI summary + exposure -->
           <div class="lg:col-span-2 rounded-2xl border border-slate-800 bg-slate-900/50 p-6 flex flex-col">
             <div class="flex items-center justify-between gap-3">
-              <h2 class="text-lg font-semibold">AI Risk Summary</h2>
-              <span class="text-[11px] text-slate-500 mono">Claude / GPT · grounded in DPDP RAG</span>
+              <h2 class="text-lg font-semibold">Risk Summary</h2>
+              <span class="text-[11px] text-slate-500 mono">LLM polish (Claude / GPT, optional) · grounded in DPDP RAG</span>
             </div>
             <p id="ai-summary" class="text-slate-300 leading-relaxed mt-3 flex-1 whitespace-pre-line">
               Run a scan to generate a board-ready risk summary. Every claim maps to an OSINT finding or a verbatim DPDP Act clause.
@@ -426,7 +439,7 @@
       <section data-panel="ask" class="panel space-y-5">
         <div>
           <h1 class="text-2xl font-bold tracking-tight">Ask DPDP</h1>
-          <p class="text-sm text-slate-400">RAG over 14 verbatim gazette passages. Every answer cites its section + page. Zero hallucinated clauses.</p>
+          <p class="text-sm text-slate-400">RAG over 49 verbatim passages (DPDP Act §§2-34 + DPDP Rules 2025 R.1-R.22 + CERT-In directions). Every answer cites its section + gazette page. Zero hallucinated clauses.</p>
         </div>
         <div class="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 space-y-4">
           <div class="flex gap-2">
@@ -462,9 +475,14 @@
               <div class="text-[11px] uppercase tracking-wider text-slate-500">Report for</div>
               <div id="report-vendor" class="text-xl font-semibold mono text-amber-300">—</div>
             </div>
-            <a id="report-dl" href="#" target="_blank" class="btn-primary px-5 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
-              ⬇ Download CISO Board Report (PDF)
-            </a>
+            <div class="flex flex-wrap items-center gap-2">
+              <a id="report-dl" href="#" target="_blank" class="btn-primary px-5 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
+                ⬇ Download CISO Board Report (PDF)
+              </a>
+              <a id="audit-dl" href="#" target="_blank" class="btn-ghost px-5 py-2.5 rounded-lg text-sm inline-flex items-center gap-2" title="Full DPDP audit evidence ZIP: scan.json + playbook.json + alerts.json + board PDF + CERT-In PDF + README">
+                ⬇ Download audit evidence pack (ZIP)
+              </a>
+            </div>
           </div>
           <div class="text-sm text-slate-300">
             <div class="text-[11px] uppercase tracking-wider text-slate-500 mb-1">What's inside</div>
@@ -472,11 +490,11 @@
               <li>Trust Score (0–100) + band + colour-coded recommendation</li>
               <li>OSINT findings with severity, evidence, and source provenance</li>
               <li>DPDP clause exposure table with verbatim gazette excerpts and ₹ penalties</li>
-              <li>AI-drafted risk summary (Claude / GPT)</li>
+              <li>LLM-drafted risk summary (Claude / GPT, optional — falls back to rule-based text)</li>
               <li>Recommended immediate actions per clause</li>
             </ul>
           </div>
-          <div class="text-[11px] text-slate-500 mono">Generated by ReportLab · grounded in DPDP Act 2023 gazette (TF-IDF RAG · 14 passages).</div>
+          <div class="text-[11px] text-slate-500 mono">Generated by ReportLab · grounded in DPDP Act 2023 gazette + Rules 2025 (TF-IDF RAG · 49 passages).</div>
         </div>
       </section>
 
@@ -566,6 +584,74 @@
         </div>
       </section>
 
+      <!-- ====== COMPLIANCE DIFF (v3.2) ====== -->
+      <section data-panel="diff" class="panel space-y-5">
+        <div class="flex items-start justify-between flex-wrap gap-3">
+          <div>
+            <h1 class="text-2xl font-bold tracking-tight">Compliance Diff · scan-over-time</h1>
+            <p class="text-sm text-slate-400">Pick any two historical scans of the same vendor. We return a set-arithmetic delta — new findings, resolved findings, score delta, ₹ exposure delta, new vs resolved DPDP clauses. Gives your Monday standup "since last week" currency.</p>
+          </div>
+          <button id="diff-refresh" class="btn-ghost px-3 py-1.5 rounded-lg text-xs">↻ Reload history</button>
+        </div>
+
+        <div id="diff-empty" class="rounded-2xl border border-slate-800 bg-slate-900/50 p-8 text-center text-slate-400">
+          <div class="text-4xl mb-2">🔀</div>
+          Scan the same vendor at least twice — then pick two snapshots to compare.
+          <div class="text-xs text-slate-500 mt-2 mono">Tip: re-scan after you complete a playbook row and watch the score climb.</div>
+        </div>
+
+        <div id="diff-card" class="hidden space-y-4">
+          <div class="rounded-xl border border-slate-800 bg-slate-900/40 p-4 space-y-3">
+            <div class="text-[10px] uppercase tracking-wider text-slate-400">Vendor</div>
+            <div id="diff-vendor" class="text-lg font-semibold mono text-amber-300">—</div>
+            <div class="grid md:grid-cols-2 gap-3">
+              <label class="text-xs text-slate-400">From scan
+                <select id="diff-from" class="w-full mt-1 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs mono"></select>
+              </label>
+              <label class="text-xs text-slate-400">To scan
+                <select id="diff-to" class="w-full mt-1 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs mono"></select>
+              </label>
+            </div>
+            <button id="diff-run" class="btn-primary px-4 py-2 rounded-lg text-xs">Compute diff</button>
+          </div>
+
+          <div id="diff-result" class="hidden space-y-3">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div class="rounded-xl border border-slate-800 bg-slate-900/40 p-3">
+                <div class="text-[10px] uppercase tracking-wider text-slate-400">Score delta</div>
+                <div id="diff-score" class="text-2xl font-bold mono">—</div>
+              </div>
+              <div class="rounded-xl border border-slate-800 bg-slate-900/40 p-3">
+                <div class="text-[10px] uppercase tracking-wider text-slate-400">₹ exposure delta</div>
+                <div id="diff-exposure" class="text-2xl font-bold mono">—</div>
+              </div>
+              <div class="rounded-xl border border-slate-800 bg-slate-900/40 p-3">
+                <div class="text-[10px] uppercase tracking-wider text-emerald-400">Resolved findings</div>
+                <div id="diff-resolved" class="text-2xl font-bold mono text-emerald-300">—</div>
+              </div>
+              <div class="rounded-xl border border-slate-800 bg-slate-900/40 p-3">
+                <div class="text-[10px] uppercase tracking-wider text-rose-400">New findings</div>
+                <div id="diff-new" class="text-2xl font-bold mono text-rose-300">—</div>
+              </div>
+            </div>
+            <div class="grid md:grid-cols-2 gap-3">
+              <div class="rounded-xl border border-slate-800 bg-slate-900/40 p-3">
+                <div class="text-[10px] uppercase tracking-wider text-emerald-400 mb-2">Resolved DPDP clauses</div>
+                <div id="diff-resolved-clauses" class="flex flex-wrap gap-2"></div>
+              </div>
+              <div class="rounded-xl border border-slate-800 bg-slate-900/40 p-3">
+                <div class="text-[10px] uppercase tracking-wider text-rose-400 mb-2">New DPDP clauses</div>
+                <div id="diff-new-clauses" class="flex flex-wrap gap-2"></div>
+              </div>
+            </div>
+            <div class="rounded-xl border border-slate-800 bg-slate-900/40 p-3">
+              <div class="text-[10px] uppercase tracking-wider text-slate-400 mb-2">Summary</div>
+              <div id="diff-summary" class="text-sm text-slate-200"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- ====== MONDAY PLAYBOOK (v3.0) ====== -->
       <section data-panel="playbook" class="panel space-y-5">
         <div class="flex items-start justify-between flex-wrap gap-3">
@@ -579,6 +665,7 @@
               <div id="playbook-savings" class="text-2xl font-bold mono text-emerald-300">₹0</div>
             </div>
             <button id="playbook-refresh" class="btn-ghost px-3 py-1.5 rounded-lg text-xs">↻ Rebuild</button>
+            <a id="playbook-csv" class="btn-ghost px-3 py-1.5 rounded-lg text-xs" href="#" target="_blank" title="Jira / Linear / GitHub-Projects-compatible CSV">⬇ CSV</a>
           </div>
         </div>
         <div id="playbook-empty" class="rounded-2xl border border-slate-800 bg-slate-900/50 p-8 text-center text-slate-400">
@@ -608,6 +695,15 @@
             <button id="contract-analyze-btn" class="btn-primary px-4 py-2 rounded-lg text-sm">▶ Analyze</button>
           </div>
         </div>
+
+        <!-- Benchmark Evidence Ledger (v3.1): one-click audit-grade reproduction -->
+        <div id="contract-benchmarks" class="rounded-xl border border-slate-800 bg-slate-900/40 p-3">
+          <div class="text-[10px] uppercase tracking-wider text-slate-400 mb-2">Benchmark ledger · click to load a canned DPA, then Analyze</div>
+          <div id="contract-benchmark-chips" class="flex flex-wrap gap-2">
+            <span class="text-xs text-slate-600 italic">loading…</span>
+          </div>
+        </div>
+
         <textarea id="contract-input" rows="8"
           class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm mono focus:outline-none focus:border-amber-400"
           placeholder="Paste the full Data Processing Agreement text here…"></textarea>
@@ -727,20 +823,36 @@
     // =========================================================================
     // Sidebar nav
     // =========================================================================
+    // v3.1: 5 top-level nav entries. Multi-panel groups render a sub-tab
+    // strip so judges see one clear story arc instead of 13 entries.
+    // Ask DPDP stays as the floating drawer ("/" hotkey) — always available.
     const NAV_ITEMS = [
-      { id: 'executive', icon: '📊', label: 'Executive Board', sub: 'Portfolio KPIs · ₹ saved' },
-      { id: 'overview',  icon: '🛡️',  label: 'Trust Overview', sub: 'Score + AI summary' },
-      { id: 'findings',  icon: '🔍',  label: 'OSINT Findings', sub: 'Evidence from 7 sources' },
-      { id: 'dpdp',      icon: '⚖️',  label: 'DPDP Exposure',  sub: 'Clauses + ISO/SOC/NIST' },
-      { id: 'playbook',  icon: '📋', label: 'Monday Playbook', sub: 'Remediation roadmap' },
-      { id: 'contract',  icon: '📝', label: 'Contract Intel',  sub: 'Layer 5 · DPA gaps' },
-      { id: 'gateway',   icon: '🚨',  label: 'Gateway & Alerts', sub: 'Live ML + containment' },
-      { id: 'canary',    icon: '🕳️', label: 'Canary Tokens',  sub: 'Tripwire endpoints' },
-      { id: 'dataflow',  icon: '🗄️', label: 'Data Flow Map',   sub: 'PII × vendor grid' },
-      { id: 'graph',     icon: '🗺️',  label: 'Vendor Graph',   sub: 'Relationship map' },
-      { id: 'ask',       icon: '💬',  label: 'Ask DPDP',       sub: 'RAG Q&A' },
-      { id: 'report',    icon: '📄',  label: 'Board Report',   sub: 'CISO-ready PDF' },
+      { id: 'executive', icon: '📊', label: 'Executive Board', sub: 'Portfolio KPIs · ₹ saved',
+        panels: [{ id: 'executive', label: 'Executive' }] },
+      { id: 'scan', icon: '🛡️', label: 'Vendor Scan', sub: 'Trust · findings · DPDP · flows',
+        panels: [
+          { id: 'overview', label: 'Overview' },
+          { id: 'findings', label: 'Findings' },
+          { id: 'dpdp',     label: 'DPDP'     },
+          { id: 'dataflow', label: 'Data Flow' },
+          { id: 'graph',    label: 'Graph'    },
+        ] },
+      { id: 'contract', icon: '📝', label: 'Contract Intel', sub: 'Layer 5 · DPA gaps + benchmark',
+        panels: [{ id: 'contract', label: 'Contract' }] },
+      { id: 'defense', icon: '🚨', label: 'Live Defense', sub: 'Gateway + canary tripwires',
+        panels: [
+          { id: 'gateway', label: 'Gateway' },
+          { id: 'canary',  label: 'Canaries' },
+        ] },
+      { id: 'remediate', icon: '📋', label: 'Remediation', sub: 'Playbook · diff · audit pack',
+        panels: [
+          { id: 'playbook', label: 'Playbook' },
+          { id: 'diff',     label: 'Diff vs last scan' },
+          { id: 'report',   label: 'Board PDF · Audit ZIP' },
+        ] },
     ];
+    const GROUP_OF = {};  // panelId -> top-level nav id
+    NAV_ITEMS.forEach(n => n.panels.forEach(p => { GROUP_OF[p.id] = n.id; }));
 
     function renderSidebar() {
       $('sidebar-nav').innerHTML = NAV_ITEMS.map(n => `
@@ -755,15 +867,70 @@
       $$('#sidebar-nav button').forEach(b => b.addEventListener('click', () => navTo(b.dataset.nav)));
     }
 
+    function renderSubTabs(navId) {
+      const bar = $('sub-tabs');
+      if (!bar) return;
+      const nav = NAV_ITEMS.find(n => n.id === navId);
+      if (!nav || nav.panels.length <= 1) {
+        bar.innerHTML = '';
+        bar.classList.add('hidden');
+        return;
+      }
+      bar.classList.remove('hidden');
+      bar.innerHTML = nav.panels.map(p => `
+        <button data-subtab="${p.id}" class="sub-tab px-3 py-1.5 rounded-lg text-xs mono border border-slate-800 hover:border-amber-400 hover:text-amber-300">${esc(p.label)}</button>
+      `).join('');
+      $$('#sub-tabs button').forEach(b => b.addEventListener('click', () => showPanel(b.dataset.subtab)));
+    }
+
+    function showPanel(panelId) {
+      $$('main > section[data-panel]').forEach(s => s.classList.toggle('active', s.dataset.panel === panelId));
+      $$('#sub-tabs button').forEach(b => b.classList.toggle('sub-tab-active', b.dataset.subtab === panelId));
+      // per-panel refresh hooks
+      if (panelId === 'graph') refreshGraph();
+      if (panelId === 'canary') loadCanaries().catch(() => {});
+      if (panelId === 'executive') refreshPortfolio().catch(() => {});
+      if (panelId === 'playbook') refreshPlaybook().catch(() => {});
+      if (panelId === 'dataflow') refreshDataflow().catch(() => {});
+      if (panelId === 'contract') refreshBenchmarks().catch(() => {});
+      if (panelId === 'diff') refreshDiffPanel().catch(() => {});
+    }
+
+    // v3.2: Ensure Remediation > Board PDF · Audit ZIP card always reflects the
+    // current lastScan, even if the user scanned from the header while already
+    // viewing that sub-tab (renderOverview's DOM update can race with the UI route).
+    function ensureReportCard() {
+      if (!lastScan || !lastScan.vendor) return;
+      const empty = document.getElementById('report-empty');
+      const card = document.getElementById('report-card');
+      if (!empty || !card) return;
+      empty.classList.add('hidden');
+      card.classList.remove('hidden');
+      const v = document.getElementById('report-vendor'); if (v) v.textContent = lastScan.vendor;
+      const rdl = document.getElementById('report-dl');
+      if (rdl) rdl.href = `${API}/report/${encodeURIComponent(lastScan.vendor)}.pdf`;
+      const adl = document.getElementById('audit-dl');
+      if (adl) adl.href = `${API}/audit/${encodeURIComponent(lastScan.vendor)}.zip`;
+    }
+
     function navTo(id) {
+      // Support being called with either a top-level nav id OR a direct panel id.
+      if (GROUP_OF[id]) {
+        const navId = GROUP_OF[id];
+        $$('#sidebar-nav button').forEach(b => b.classList.toggle('active', b.dataset.nav === navId));
+        renderSubTabs(navId);
+        showPanel(id);
+        if (id === 'report') ensureReportCard();
+        if (id === 'diff') { try { refreshDiffPanel(); } catch {} }
+        return;
+      }
+      const nav = NAV_ITEMS.find(n => n.id === id);
+      if (!nav) return;
       $$('#sidebar-nav button').forEach(b => b.classList.toggle('active', b.dataset.nav === id));
-      $$('main > section[data-panel]').forEach(s => s.classList.toggle('active', s.dataset.panel === id));
-      // auto-refresh graph when opening graph panel
-      if (id === 'graph') refreshGraph();
-      if (id === 'canary') loadCanaries().catch(() => {});
-      if (id === 'executive') refreshPortfolio().catch(() => {});
-      if (id === 'playbook') refreshPlaybook().catch(() => {});
-      if (id === 'dataflow') refreshDataflow().catch(() => {});
+      renderSubTabs(id);
+      showPanel(nav.panels[0].id);
+      if (nav.panels[0].id === 'report') ensureReportCard();
+      if (nav.panels[0].id === 'diff') { try { refreshDiffPanel(); } catch {} }
     }
 
     // =========================================================================
@@ -791,12 +958,49 @@
           $('rag-chip').textContent = `rag: ${r.engines.dpdp_rag.passages} passages`;
           $('rag-chip').classList.remove('hidden');
         }
+        // v3.2.1: rule engine self-test chip
+        refreshSelftestChip().catch(() => {});
       } catch {
         const s = $('api-status');
         s.textContent = 'api: offline';
         s.style.color = '#fda4af';
         s.style.borderColor = 'rgba(244,63,94,0.4)';
         s.style.background = 'rgba(244,63,94,0.08)';
+      }
+    }
+
+    // v3.2.1: rule engine self-test chip. One click re-runs /selftest and
+    // updates the chip. Green when all benchmark DPAs match expected verdict,
+    // red otherwise.
+    async function refreshSelftestChip() {
+      const chip = $('selftest-chip');
+      if (!chip) return;
+      try {
+        chip.textContent = 'selftest: …';
+        chip.style.color = '#cbd5e1';
+        chip.style.borderColor = 'rgba(148,163,184,0.4)';
+        chip.style.background = 'rgba(148,163,184,0.08)';
+        chip.classList.remove('hidden');
+        const r = await api('/selftest');
+        const ok = r.all_green === true;
+        chip.textContent = `selftest: ${r.passed}/${r.total} ${ok ? '✓' : '✗'}`;
+        if (ok) {
+          chip.style.color = '#6ee7b7';
+          chip.style.borderColor = 'rgba(16,185,129,0.4)';
+          chip.style.background = 'rgba(16,185,129,0.08)';
+        } else {
+          chip.style.color = '#fda4af';
+          chip.style.borderColor = 'rgba(244,63,94,0.4)';
+          chip.style.background = 'rgba(244,63,94,0.08)';
+        }
+        chip.title = (r.results || []).map(x =>
+          `${x.id}: expected=${x.expected_verdict} got=${x.actual_verdict} cov=${x.coverage_pct}% ${x.passed ? 'PASS' : 'FAIL'}`
+        ).join('\n') || 'Rule engine self-test';
+      } catch (e) {
+        chip.textContent = 'selftest: err';
+        chip.style.color = '#fda4af';
+        chip.style.borderColor = 'rgba(244,63,94,0.4)';
+        chip.style.background = 'rgba(244,63,94,0.08)';
       }
     }
 
@@ -904,6 +1108,8 @@
       $('report-card').classList.remove('hidden');
       $('report-vendor').textContent = r.vendor;
       $('report-dl').href = `${API}/report/${encodeURIComponent(r.vendor)}.pdf`;
+      const auditBtn = $('audit-dl');
+      if (auditBtn) auditBtn.href = `${API}/audit/${encodeURIComponent(r.vendor)}.zip`;
 
       // DPDP pdf link
       const pdfBtn = $('dpdp-pdf');
@@ -1575,6 +1781,8 @@ Cite: ${m.rag_citation || ''}`;
         $('playbook-empty').classList.add('hidden');
         $('playbook-card').classList.remove('hidden');
         $('playbook-savings').textContent = fmtINR(p.total_savings_inr);
+        const csvBtn = $('playbook-csv');
+        if (csvBtn) csvBtn.href = `${API}/playbook/${encodeURIComponent(vendor)}.csv`;
         renderPlaybookRows();
       } catch (e) {
         $('playbook-empty').classList.remove('hidden');
@@ -1642,6 +1850,105 @@ This addendum governs the processing of personal data.
 6. No audit rights are granted.
 7. This agreement is governed by the laws of California.`;
 
+    // v3.1: Benchmark Evidence Ledger — load canned DPAs into the analyzer.
+    async function refreshBenchmarks() {
+      const box = $('contract-benchmark-chips');
+      if (!box) return;
+      try {
+        const r = await api('/benchmark/dpas');
+        const colors = { green: '#10b981', amber: '#f59e0b', red: '#ef4444' };
+        box.innerHTML = (r.dpas || []).map(d => {
+          const c = colors[d.expected_verdict] || '#94a3b8';
+          return `<button class="chip mono clickable" data-bench="${esc(d.id)}"
+            style="color:${c};border-color:${c}55;background:${c}14">
+            ${esc(d.label)}
+          </button>`;
+        }).join(' ');
+        box.querySelectorAll('button[data-bench]').forEach(b => {
+          b.addEventListener('click', async () => {
+            const detail = await api('/benchmark/dpas/' + b.dataset.bench);
+            $('contract-input').value = detail.text || '';
+            // auto-analyze for maximum demo clarity
+            analyzeContract();
+          });
+        });
+      } catch {
+        box.innerHTML = '<span class="text-xs text-rose-400 italic">benchmark ledger unavailable</span>';
+      }
+    }
+
+    // v3.2: Compliance Diff panel — scan-over-time delta UI.
+    async function refreshDiffPanel() {
+      const vendor = (lastScan && lastScan.vendor) || $('vendor-input').value.trim().toLowerCase();
+      const empty = $('diff-empty');
+      const card = $('diff-card');
+      if (!empty || !card) return;
+      if (!vendor) {
+        empty.classList.remove('hidden');
+        card.classList.add('hidden');
+        return;
+      }
+      try {
+        const h = await api(`/scan/${encodeURIComponent(vendor)}/history`);
+        const hist = h.history || [];
+        if (hist.length < 2) {
+          empty.classList.remove('hidden');
+          card.classList.add('hidden');
+          empty.innerHTML = `<div class="text-4xl mb-2">🔀</div>Need at least 2 historical scans of <span class="mono text-amber-300">${esc(vendor)}</span>. Re-scan from the Vendor Scan panel to build history.`;
+          return;
+        }
+        empty.classList.add('hidden');
+        card.classList.remove('hidden');
+        $('diff-vendor').textContent = vendor;
+        const opts = hist.map(row => {
+          const ts = row.created_at || row.timestamp || row.ts || '';
+          const score = row.score != null ? `score ${row.score}` : '';
+          return `<option value="${esc(row.id)}">#${esc(row.id)} · ${esc(ts)} · ${esc(score)}</option>`;
+        });
+        // From = earliest, To = latest.
+        $('diff-from').innerHTML = opts.join('');
+        $('diff-to').innerHTML = opts.join('');
+        $('diff-from').selectedIndex = opts.length - 1;  // history is newest-first → oldest option last
+        $('diff-to').selectedIndex = 0;                  // newest option first
+        $('diff-result').classList.add('hidden');
+      } catch (e) {
+        empty.classList.remove('hidden');
+        card.classList.add('hidden');
+        empty.innerHTML = `<div class="text-4xl mb-2">🔀</div><div class="text-rose-400">${esc(e.message)}</div>`;
+      }
+    }
+
+    async function computeDiff() {
+      const vendor = $('diff-vendor').textContent.trim();
+      const from = $('diff-from').value;
+      const to = $('diff-to').value;
+      if (!vendor || !from || !to) return;
+      try {
+        const d = await api(`/scan/${encodeURIComponent(vendor)}/diff?from_id=${encodeURIComponent(from)}&to_id=${encodeURIComponent(to)}`);
+        $('diff-result').classList.remove('hidden');
+        const dScore = d.score_delta != null ? d.score_delta : 0;
+        const dExp = d.exposure_delta_inr != null ? d.exposure_delta_inr : 0;
+        const sEl = $('diff-score');
+        sEl.textContent = (dScore >= 0 ? '+' : '') + dScore;
+        sEl.style.color = dScore >= 0 ? '#10b981' : '#ef4444';
+        const eEl = $('diff-exposure');
+        eEl.textContent = (dExp >= 0 ? '+' : '') + fmtINR(Math.abs(dExp));
+        eEl.style.color = dExp <= 0 ? '#10b981' : '#ef4444';
+        $('diff-resolved').textContent = (d.resolved_findings || []).length;
+        $('diff-new').textContent = (d.new_findings || []).length;
+        $('diff-resolved-clauses').innerHTML = (d.resolved_clauses || []).map(c =>
+          `<span class="chip mono" style="color:#10b981;border-color:#10b98144;background:#10b98114">§${esc(c)}</span>`
+        ).join(' ') || '<span class="text-xs text-slate-500 italic">none</span>';
+        $('diff-new-clauses').innerHTML = (d.new_clauses || []).map(c =>
+          `<span class="chip mono" style="color:#ef4444;border-color:#ef444444;background:#ef444414">§${esc(c)}</span>`
+        ).join(' ') || '<span class="text-xs text-slate-500 italic">none</span>';
+        $('diff-summary').textContent = d.summary || '—';
+      } catch (e) {
+        $('diff-result').classList.remove('hidden');
+        $('diff-summary').innerHTML = `<span class="text-rose-400">${esc(e.message)}</span>`;
+      }
+    }
+
     async function analyzeContract() {
       const text = $('contract-input').value || '';
       if (!text.trim()) { alert('Paste the contract text first.'); return; }
@@ -1668,11 +1975,12 @@ This addendum governs the processing of personal data.
             ...(cx.soc2 || []).map(c => `<span class="chip mono" style="color:#a855f7;border-color:rgba(168,85,247,0.35);background:rgba(168,85,247,0.08)">SOC2 · ${esc(c)}</span>`),
             ...(cx.nist_csf || []).map(c => `<span class="chip mono" style="color:#34d399;border-color:rgba(52,211,153,0.35);background:rgba(52,211,153,0.08)">NIST · ${esc(c)}</span>`),
           ].join(' ');
+          const conf = g.confidence != null ? ` · conf ${(g.confidence * 100).toFixed(0)}%` : '';
           return `
             <div class="rounded-xl border p-4" style="border-color:${col}55; background:${col}0d">
               <div class="flex items-start justify-between gap-3 flex-wrap">
                 <div>
-                  <span class="chip mono" style="color:${col};border-color:${col}55;background:${col}18">${label}</span>
+                  <span class="chip mono" style="color:${col};border-color:${col}55;background:${col}18">${label}${conf}</span>
                   <span class="mono text-amber-300 ml-2">${esc(g.section)}</span>
                   <span class="text-sm ml-2">${esc(g.label)}</span>
                 </div>
@@ -1841,12 +2149,17 @@ This addendum governs the processing of personal data.
         navTo('playbook');
         await sleep(1800);
 
-        // 5. Contract Intelligence — paste weak DPA, analyze
+        // 5. Contract Intelligence — fire the Benchmark "weak" chip so judges
+        //    see the reproducible rule engine in action. Falls back to SAMPLE_DPA.
         navTo('contract');
-        $('contract-input').value = SAMPLE_DPA;
-        await sleep(800);
-        await analyzeContract();
-        await sleep(2500);
+        await sleep(500);
+        try { await refreshBenchmarks(); } catch {}
+        const weakBtn = document.querySelector('#contract-benchmark-chips button[data-bench="weak-dpa"]');
+        if (weakBtn) { weakBtn.click(); } else {
+          $('contract-input').value = SAMPLE_DPA;
+          await analyzeContract();
+        }
+        await sleep(3000);
 
         // 6. Gateway — activate + simulate breach
         navTo('gateway');
@@ -1856,7 +2169,16 @@ This addendum governs the processing of personal data.
         await simulateAttack();
         await sleep(4500);
 
-        // 7. Ask DPDP drawer — live RAG citation
+        // 7. Compliance Diff — show scan-over-time currency (v3.2)
+        try {
+          await fetch(`${API}/scan`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({vendor:'paytrust-partner.com'}) });
+          navTo('diff');
+          await sleep(1200);
+          await computeDiff();
+        } catch {}
+        await sleep(2500);
+
+        // 8. Ask DPDP drawer — live RAG citation
         toggleDrawer(true);
         await sleep(400);
         await drawerAsk('What are the penalties under Section 8(5)?');
@@ -1900,11 +2222,18 @@ This addendum governs the processing of personal data.
 
       $('demo-btn').addEventListener('click', runDemo);
 
+      // v3.2.1: clicking the selftest chip re-runs the benchmark harness.
+      const st = $('selftest-chip');
+      if (st) st.addEventListener('click', () => refreshSelftestChip());
+
       // v3.0 wiring — portfolio, playbook, contract, dataflow, drawer
       $('portfolio-refresh').addEventListener('click', () => refreshPortfolio());
       $('bulk-scan-btn').addEventListener('click', runBulkScan);
 
       $('playbook-refresh').addEventListener('click', () => refreshPlaybook());
+      // v3.2 Compliance Diff wiring
+      const diffRefresh = $('diff-refresh'); if (diffRefresh) diffRefresh.addEventListener('click', () => refreshDiffPanel());
+      const diffRun = $('diff-run'); if (diffRun) diffRun.addEventListener('click', () => computeDiff());
       $$('#playbook-tabs button').forEach(b => b.addEventListener('click', () => {
         $$('#playbook-tabs button').forEach(x => x.classList.toggle('active', x === b));
         playbookFilter = b.dataset.pb;

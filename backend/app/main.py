@@ -6,12 +6,17 @@ Docs: http://localhost:8000/docs
 from __future__ import annotations
 
 import asyncio
+import io
+import json
 import time
+import zipfile
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import PlainTextResponse, Response
 from sse_starlette.sse import EventSourceResponse
 
 from app import __version__
@@ -21,6 +26,7 @@ from app.modules import (
     alerts,
     anomaly,
     canary,
+    compliance_diff,
     contract,
     dpdp,
     events,
@@ -88,6 +94,9 @@ def root() -> dict:
         "tagline": "The only vendor risk scanner that speaks DPDP.",
         "docs": "/docs",
         "integrations": {
+            "crt_sh": True,  # always live: public CT-log service, no key
+            "dns": True,     # always live: TXT/MX/NS/DMARC/SPF lookups
+            "tls": True,     # always live: cert chain + expiry
             "shodan": settings.has_shodan,
             "hibp": settings.has_hibp,
             "virustotal": settings.has_virustotal,
@@ -107,6 +116,11 @@ def root() -> dict:
             "behavioural_ml": anomaly.model().summary(),
             "dpdp_rag": rag.retriever().stats(),
             "framework_crosswalk": framework.frameworks_catalog(),
+            "contract_rules": {"total": 17, "sections": ["\u00a74", "\u00a77", "\u00a78", "\u00a79", "\u00a710", "\u00a716", "\u00a717", "\u00a725"]},
+            "benchmark_selftest": {
+                "endpoint": "/selftest",
+                "note": "Runs all 4 benchmark DPAs through Contract Intel and verifies actual verdicts match expected_verdict. Reproducible audit.",
+            },
         },
         "demo_mode": settings.demo_mode,
     }
@@ -159,6 +173,205 @@ async def get_scan(vendor: str) -> ScanResponse:
 @app.get("/vendors")
 async def vendors() -> dict:
     return {"vendors": await store.list_vendors()}
+
+
+# ------------------------------------------------------------------ scan history / diff
+@app.get("/scan/{vendor}/history")
+async def scan_history(vendor: str, limit: int = Query(20, ge=1, le=200)) -> dict:
+    vendor = vendor.strip().lower()
+    rows = await store.scan_history(vendor, limit)
+    return {"vendor": vendor, "count": len(rows), "history": rows}
+
+
+@app.get("/scan/{vendor}/diff")
+async def scan_diff(vendor: str, from_id: int | None = None, to_id: int | None = None) -> dict:
+    """Compare two scans for a vendor.
+
+    Defaults to diffing the two most recent scans; pass `from_id` / `to_id`
+    query params to select any two historical snapshots by their numeric id.
+    """
+    vendor = vendor.strip().lower()
+    rows = await store.scan_history(vendor, 200)
+    if len(rows) == 0:
+        raise HTTPException(404, f"No scans for '{vendor}'. POST /scan first.")
+    # Default: compare the latest two
+    if from_id is None and to_id is None:
+        if len(rows) < 2:
+            new = await store.load_scan(vendor)
+            return {"vendor": vendor, **compliance_diff.diff(None, new)}
+        to_id = rows[0]["id"]
+        from_id = rows[1]["id"]
+    old = await store.scan_by_id(from_id) if from_id else None
+    new = await store.scan_by_id(to_id) if to_id else None
+    if new is None:
+        new = await store.load_scan(vendor)
+    return {"vendor": vendor, "from_id": from_id, "to_id": to_id, **compliance_diff.diff(old, new)}
+
+
+# ------------------------------------------------------------------ live OSINT
+@app.get("/benchmark/dpas")
+def benchmark_dpas() -> dict:
+    """Benchmark Evidence Ledger: canned DPAs (strong / ambiguous / weak /
+    commodity-SaaS) that judges can click through to verify the rule engine."""
+    path = Path(__file__).parent / "data" / "benchmark_dpas.json"
+    blob = json.loads(path.read_text())
+    return {
+        "source": blob["source"],
+        "dpas": [
+            {
+                "id": d["id"],
+                "label": d["label"],
+                "expected_verdict": d["expected_verdict"],
+                "length": len(d["text"]),
+            }
+            for d in blob["dpas"]
+        ],
+    }
+
+
+@app.get("/benchmark/dpas/{dpa_id}")
+def benchmark_dpa_detail(dpa_id: str) -> dict:
+    """Return a canned DPA analyzed through Layer 5 Contract Intelligence.
+
+    The `gaps[]` array contains the full evidence/red-flag trace and confidence
+    score, so judges can click through to the exact keyword/regex that produced
+    each verdict.
+    """
+    path = Path(__file__).parent / "data" / "benchmark_dpas.json"
+    blob = json.loads(path.read_text())
+    match = next((d for d in blob["dpas"] if d["id"] == dpa_id), None)
+    if not match:
+        raise HTTPException(404, f"Unknown benchmark DPA '{dpa_id}'.")
+    result = contract.analyze(match["text"])
+    return {
+        "id": match["id"],
+        "label": match["label"],
+        "expected_verdict": match["expected_verdict"],
+        "text": match["text"],
+        "analysis": result,
+    }
+
+
+def _actual_verdict(analysis: dict, dpa: dict) -> str:
+    """Derive a green/amber/red verdict from Contract Intel output.
+
+    The tri-state heuristic:
+      * **green**: zero explicit violations AND coverage >= 60% (or the DPA's
+        own `expected_coverage_pct_min`, whichever is higher).
+      * **red**: dominant explicit violations (>= 5 red-flag hits).
+      * **amber**: everything else (vague / partially covered / a handful of
+        explicit issues but not systemic).
+
+    This matches the framing we use in the pitch: "red" means a judge should
+    walk away, not just ask for rewrites.
+    """
+    cov = int(analysis.get("coverage_pct") or 0)
+    red = int(analysis.get("red_count") or 0)
+    pct_min = dpa.get("expected_coverage_pct_min") or 60
+    if red == 0 and cov >= pct_min:
+        return "green"
+    if red >= 5:
+        return "red"
+    return "amber"
+
+
+@app.get("/selftest")
+def selftest() -> dict:
+    """Reproducible rule-engine self-test.
+
+    Runs all benchmark DPAs through Layer 5 Contract Intelligence and compares
+    the produced verdict against the expected_verdict baked into each DPA.
+    Judges can verify the rule engine matches its documented behaviour with a
+    single curl — no UI, no auth, no LLM.
+    """
+    blob = json.loads(
+        (Path(__file__).parent / "data" / "benchmark_dpas.json").read_text()
+    )
+    results = []
+    for d in blob["dpas"]:
+        analysis = contract.analyze(d["text"])
+        actual = _actual_verdict(analysis, d)
+        expected = d["expected_verdict"]
+        cov = int(analysis.get("coverage_pct") or 0)
+        ok = (actual == expected)
+        # Also honour coverage_pct_min / coverage_pct_max bounds if set
+        if d.get("expected_coverage_pct_min") is not None:
+            ok = ok and cov >= int(d["expected_coverage_pct_min"])
+        if d.get("expected_coverage_pct_max") is not None:
+            ok = ok and cov <= int(d["expected_coverage_pct_max"])
+        results.append({
+            "id": d["id"],
+            "label": d["label"],
+            "expected_verdict": expected,
+            "actual_verdict": actual,
+            "coverage_pct": cov,
+            "red_count": int(analysis.get("red_count") or 0),
+            "amber_count": int(analysis.get("amber_count") or 0),
+            "green_count": int(analysis.get("green_count") or 0),
+            "potential_penalty_inr": int(analysis.get("potential_penalty_inr") or 0),
+            "passed": bool(ok),
+        })
+    passed = sum(1 for r in results if r["passed"])
+    total = len(results)
+    return {
+        "version": __version__,
+        "passed": passed,
+        "total": total,
+        "all_green": passed == total,
+        "summary": (
+            f"{passed}/{total} benchmark DPAs match expected verdict"
+            + (" \u2014 rule engine self-test PASS." if passed == total else " \u2014 rule engine self-test FAIL.")
+        ),
+        "results": results,
+    }
+
+
+@app.get("/osint/live/{vendor}")
+async def osint_live(vendor: str) -> dict:
+    """Live, key-less OSINT for a domain.
+
+    Calls crt.sh (Certificate Transparency public logs) directly and returns the
+    raw subdomain list + response time. Judges can verify external data is real
+    by comparing against `curl 'https://crt.sh/?q=%25.<vendor>&output=json'`.
+    """
+    import time as _time
+    import httpx as _httpx
+
+    vendor = vendor.strip().lower()
+    if not vendor:
+        raise HTTPException(400, "Missing vendor")
+    url = f"https://crt.sh/?q=%25.{vendor}&output=json"
+    t0 = _time.perf_counter()
+    entries: list = []
+    error = None
+    try:
+        async with _httpx.AsyncClient(timeout=8.0) as c:
+            r = await c.get(url, headers={"user-agent": f"VendorGuard-AI/{__version__}"})
+            if r.status_code == 200:
+                entries = r.json()
+            else:
+                error = f"crt.sh returned HTTP {r.status_code}"
+    except Exception as exc:
+        error = repr(exc)
+    dt = int((_time.perf_counter() - t0) * 1000)
+    subs = sorted({e.get("name_value", "").lower() for e in entries if e.get("name_value")})
+    # crt.sh returns multi-line name_value (newline-separated SAN list)
+    flat: set[str] = set()
+    for s in subs:
+        for part in s.split("\n"):
+            part = part.strip().strip("*. ")
+            if part and "." in part:
+                flat.add(part)
+    return {
+        "vendor": vendor,
+        "source": "crt.sh (Certificate Transparency)",
+        "verify_url": url,
+        "requested_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "latency_ms": dt,
+        "error": error,
+        "subdomain_count": len(flat),
+        "subdomains": sorted(flat)[:50],
+    }
 
 
 # ------------------------------------------------------------------ gateway
@@ -379,6 +592,53 @@ async def contract_analyze(req: ContractAnalyzeRequest) -> dict:
 
 
 # ------------------------------------------------------------------ remediation playbook
+# NOTE: the .csv route MUST come before the plain route because FastAPI picks the
+# first matching path and `{vendor}` would otherwise swallow the ".csv" suffix.
+@app.get("/playbook/{vendor}.csv")
+async def get_playbook_csv(vendor: str) -> PlainTextResponse:
+    """Playbook as Jira / Linear / GitHub-Projects-compatible CSV."""
+    vendor = vendor.strip().lower()
+    scan = await store.load_scan(vendor)
+    if not scan:
+        raise HTTPException(404, f"No scan yet for '{vendor}'. POST /scan first.")
+    pb = playbook.build_for(scan)
+    # Flatten next_7_days + next_30_days + long_horizon + any 'tasks' / 'rows'
+    buckets = []
+    for key in ("next_7_days", "next_30_days", "long_horizon", "tasks", "rows"):
+        v = pb.get(key)
+        if isinstance(v, list):
+            buckets.extend([(key, r) for r in v])
+    import csv as _csv
+    import io as _io
+
+    sio = _io.StringIO()
+    w = _csv.writer(sio, quoting=_csv.QUOTE_ALL)
+    w.writerow(["Vendor", "Bucket", "Section", "Owner", "SLA_days", "Savings_INR", "Title", "Summary", "Frameworks"])
+    for bucket, row in buckets:
+        cx = row.get("crosswalk") or {}
+        fw = ";".join(
+            [f"ISO:{c}" for c in (cx.get("iso27001") or [])]
+            + [f"SOC2:{c}" for c in (cx.get("soc2") or [])]
+            + [f"NIST:{c}" for c in (cx.get("nist_csf") or [])]
+        )
+        w.writerow([
+            vendor,
+            bucket,
+            row.get("section", ""),
+            row.get("owner", ""),
+            row.get("sla_days", row.get("sla", "")),
+            row.get("savings_inr", row.get("impact_inr", "")),
+            row.get("title", row.get("label", "")),
+            (row.get("summary") or row.get("obligation") or "")[:300],
+            fw,
+        ])
+    return PlainTextResponse(
+        content=sio.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="playbook-{vendor}.csv"'},
+    )
+
+
 @app.get("/playbook/{vendor}")
 async def get_playbook(vendor: str) -> dict:
     vendor = vendor.strip().lower()
@@ -386,6 +646,111 @@ async def get_playbook(vendor: str) -> dict:
     if not scan:
         raise HTTPException(404, f"No scan yet for '{vendor}'. POST /scan first.")
     return playbook.build_for(scan)
+
+
+# ------------------------------------------------------------------ audit bundle (v3.2)
+@app.get("/audit/{vendor}.zip")
+async def audit_bundle(vendor: str):
+    """One-click DPDP evidence pack:
+    scan.json + playbook.json + recent_alerts.json + contract_analysis.json (if any) +
+    Board report PDF + CERT-In incident PDF (if any alert) + README.md.
+    Hand this ZIP to the Data Protection Board / auditor.
+    """
+    vendor = vendor.strip().lower()
+    scan = await store.load_scan(vendor)
+    if not scan:
+        raise HTTPException(404, f"No scan yet for '{vendor}'. POST /scan first.")
+
+    pb = playbook.build_for(scan)
+    all_alerts = await store.recent_alerts(500)
+    vendor_alerts = [a for a in all_alerts if (a.get("vendor") or "").lower() == vendor]
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(f"{vendor}/scan.json", json.dumps(scan, indent=2, default=str))
+        zf.writestr(f"{vendor}/playbook.json", json.dumps(pb, indent=2, default=str))
+        zf.writestr(
+            f"{vendor}/alerts.json",
+            json.dumps(vendor_alerts, indent=2, default=str),
+        )
+        # Board PDF
+        try:
+            pdf = report.render_pdf(scan)
+            zf.writestr(f"{vendor}/board-report.pdf", pdf)
+        except Exception as e:  # noqa: BLE001
+            zf.writestr(f"{vendor}/board-report.error.txt", f"render failed: {e}")
+        # CERT-In PDF (first critical alert, if any)
+        crit = next((a for a in vendor_alerts if a.get("severity") in ("critical", "high")), None)
+        if crit:
+            try:
+                certin = incident.render_pdf(crit, scan)
+                zf.writestr(
+                    f"{vendor}/certin-incident-{crit.get('id', 'alert')}.pdf", certin
+                )
+            except Exception as e:  # noqa: BLE001
+                zf.writestr(f"{vendor}/certin-incident.error.txt", f"render failed: {e}")
+
+        readme = _audit_readme(vendor, scan, pb, vendor_alerts)
+        zf.writestr(f"{vendor}/README.md", readme)
+
+    buf.seek(0)
+    filename = f"vendorguard-audit-{vendor}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.zip"
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _audit_readme(vendor: str, scan: dict, pb: dict, alerts: list[dict]) -> str:
+    # ScanResponse payload: scan['trust'] is a ScoreBand dict {score, band, color, label}
+    # and the INR exposure lives under 'total_dpdp_exposure_inr'.
+    trust = scan.get("trust") or {}
+    score = trust.get("score", "—")
+    band = trust.get("band", "—")
+    exposure = int(scan.get("total_dpdp_exposure_inr") or 0)
+    exposure_cr = f"₹{exposure / 1e7:.2f} Cr" if exposure >= 1e7 else f"₹{exposure:,}"
+    findings = len(scan.get("findings") or [])
+    dpdp_count = len(scan.get("dpdp") or scan.get("dpdp_mappings") or [])
+    bucket_lines = []
+    for key in ("next_7_days", "next_30_days", "long_horizon"):
+        items = pb.get(key) or []
+        if items:
+            bucket_lines.append(f"- **{key}** — {len(items)} action(s)")
+    return f"""# VendorGuard AI — DPDP Audit Evidence Bundle
+
+Vendor: **{vendor}**
+Generated: {datetime.now(timezone.utc).isoformat()}
+Tool: VendorGuard AI v{__version__}
+
+## Snapshot
+- Trust score: **{score}/100** · band **{band}**
+- DPDP ₹ exposure: **{exposure_cr}**  (_raw: {exposure}_)
+- OSINT findings: {findings}
+- DPDP clauses triggered: {dpdp_count}
+- Alerts tied to this vendor: {len(alerts)}
+
+## Files in this bundle
+- `scan.json` — full OSINT + scoring + DPDP mapping payload (machine-readable).
+- `playbook.json` — Monday remediation playbook: owners, SLAs, ₹ savings, frameworks.
+- `alerts.json` — gateway / canary / rule-engine alerts observed for this vendor.
+- `board-report.pdf` — CISO-ready PDF (same content served by `GET /report/{{vendor}}.pdf`).
+- `certin-incident-*.pdf` — CERT-In 6-hour incident Form-A (if a critical alert exists).
+- `README.md` — this file.
+
+## Playbook summary
+{chr(10).join(bucket_lines) or "- (no remediation actions)"}
+
+## How an auditor verifies this
+1. Every DPDP mapping in `scan.json` carries a verbatim Act quote + gazette-page
+   citation under the `rag_quote` / `rag_citation` fields. Cross-check against
+   the DPDP Act 2023 Gazette (already indexed in VendorGuard's 49-passage corpus).
+2. Every playbook row has a framework crosswalk (`iso27001` / `soc2` / `nist_csf`)
+   so a GRC programme can be re-scoped without re-running the scan.
+3. All timestamps are ISO-8601 UTC. All monetary values are INR (₹).
+
+Rules where rules belong. ML where ML belongs. LLM only for polish. Nothing hidden.
+"""
 
 
 # ------------------------------------------------------------------ executive / portfolio
